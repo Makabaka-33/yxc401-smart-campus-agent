@@ -1,0 +1,291 @@
+from io import BytesIO
+
+from backend.main import app
+from docx import Document
+from fastapi.testclient import TestClient
+from openpyxl import Workbook
+
+
+def api() -> TestClient:
+    return TestClient(app)
+
+
+def test_chat_creates_session_and_logs_call():
+    with api() as client:
+        response = client.post(
+            "/api/chat",
+            json={"mode": "learning", "message": "帮我制定数据结构复习计划"},
+        )
+        calls = client.get("/api/api-calls").json()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_id"]
+    assert data["mock"] is True
+    assert "学习助手" in data["answer"]
+    assert calls
+    assert calls[0]["success"] == 1
+
+
+def test_second_turn_reuses_history():
+    with api() as client:
+        first = client.post(
+            "/api/chat",
+            json={"mode": "learning", "message": "我正在准备智能体竞赛"},
+        ).json()
+        second = client.post(
+            "/api/chat",
+            json={
+                "mode": "learning",
+                "session_id": first["session_id"],
+                "message": "那下一步该做什么",
+            },
+        ).json()
+    assert second["session_id"] == first["session_id"]
+    assert "延续" in second["answer"]
+
+
+def test_status_and_documents_available():
+    with api() as client:
+        status = client.get("/api/status")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["document_count"] >= 1
+    assert payload["chunk_count"] >= 1
+
+
+def test_mock_auth_endpoints():
+    with api() as client:
+        status = client.get("/api/auth/status")
+        login = client.post(
+            "/api/auth/mock-login",
+            json={"username": "20260001", "password": "demo"},
+        )
+        logout = client.post("/api/auth/logout")
+
+    assert status.status_code == 200
+    assert status.json()["portal_url"] == "https://my.nau.edu.cn/index.html#/"
+    assert login.status_code == 200
+    assert login.json()["authenticated"] is True
+    assert logout.status_code == 200
+    assert logout.json()["authenticated"] is False
+
+
+def test_stream_returns_expected_sse_events():
+    with api() as client:
+        with client.stream(
+            "POST",
+            "/api/chat/stream",
+            json={"mode": "teaching", "message": "生成一份课堂活动设计"},
+        ) as response:
+            body = response.read().decode("utf-8")
+    assert response.status_code == 200
+    assert "event: meta" in body
+    assert "event: token" in body
+    assert "event: references" in body
+    assert "event: done" in body
+
+
+def test_deep_research_and_web_search_modes():
+    with api() as client:
+        response = client.post(
+            "/api/chat",
+            json={
+                "mode": "audit",
+                "message": "分析审计证据可靠性",
+                "deep_research": True,
+                "web_search": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert "深度研究" in response.json()["answer"]
+    assert "未执行真实网络检索" in response.json()["answer"]
+
+
+def test_upload_txt_and_docx_generate_chunks():
+    with api() as client:
+        txt_response = client.post(
+            "/api/upload",
+            files={"file": ("course.txt", "数据结构课程包含线性表、树、图、排序等知识点。".encode("utf-8"), "text/plain")},
+        )
+
+        doc = Document()
+        doc.add_paragraph("教学设计应包含教学目标、课堂活动、试题和 Rubric。")
+        doc_bytes = BytesIO()
+        doc.save(doc_bytes)
+        doc_bytes.seek(0)
+        docx_response = client.post(
+            "/api/upload",
+            files={
+                "file": (
+                    "teaching.docx",
+                    doc_bytes.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+
+    assert txt_response.status_code == 200
+    assert txt_response.json()["chunk_count"] >= 1
+    assert docx_response.status_code == 200
+    assert docx_response.json()["chunk_count"] >= 1
+
+
+def test_report_generation():
+    with api() as client:
+        chat = client.post(
+            "/api/chat",
+            json={"mode": "affairs", "message": "奖学金怎么申请"},
+        ).json()
+        report = client.post("/api/reports", json={"session_id": chat["session_id"]})
+    assert report.status_code == 200
+    assert report.json()["download_url"].startswith("/api/reports/")
+
+
+def test_audit_mode_and_artifacts():
+    with api() as client:
+        chat = client.post(
+            "/api/chat",
+            json={"mode": "audit", "message": "解释审计风险模型"},
+        )
+        mindmap = client.post(
+            "/api/artifacts/mindmap",
+            json={"mode": "audit", "prompt": "审计风险模型"},
+        )
+        quiz = client.post(
+            "/api/artifacts/quiz",
+            json={"mode": "audit", "prompt": "审计证据", "question_count": 4},
+        )
+        workpaper = client.post(
+            "/api/artifacts/audit-workpaper",
+            json={"mode": "audit", "prompt": "政府采购合规性案例"},
+        )
+
+    assert chat.status_code == 200
+    assert "审计学习助手" in chat.json()["answer"]
+    assert mindmap.status_code == 200
+    assert "mindmap" in mindmap.json()["content"]
+    assert quiz.status_code == 200
+    assert "测验题" in quiz.json()["content"]
+    assert workpaper.status_code == 200
+    assert "审计工作底稿" in workpaper.json()["content"]
+
+
+def test_upload_xlsx_generate_chunks():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "报销明细"
+    sheet.append(["日期", "人员", "金额", "事项"])
+    sheet.append(["2026-01-05", "张三", 1888, "差旅费"])
+    sheet.append(["2026-01-06", "张三", 1888, "差旅费"])
+    payload = BytesIO()
+    workbook.save(payload)
+    payload.seek(0)
+
+    with api() as client:
+        response = client.post(
+            "/api/upload",
+            files={
+                "file": (
+                    "audit-data.xlsx",
+                    payload.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["chunk_count"] >= 1
+
+
+def test_translation_text_and_file_export():
+    with api() as client:
+        text = client.post(
+            "/api/translate/text",
+            json={"source_text": "audit evidence and internal control", "target_language": "中文"},
+        )
+        exported = client.post(
+            "/api/translate/file",
+            data={"target_language": "中文"},
+            files={"file": ("audit-note.txt", b"audit evidence and working paper", "text/plain")},
+        )
+        summary = client.post(
+            "/api/translate/summary",
+            json={"source_text": "audit evidence and internal control", "target_language": "中英双语"},
+        )
+        download = client.get(exported.json()["download_url"])
+
+    assert text.status_code == 200
+    assert "审计证据" in text.json()["translation"]
+    assert exported.status_code == 200
+    assert exported.json()["download_url"].startswith("/api/exports/")
+    assert summary.status_code == 200
+    assert "English Key Points" in summary.json()["summary"]
+    assert download.status_code == 200
+
+
+def test_document_history_supports_preview_download_and_images():
+    with api() as client:
+        uploaded = client.post(
+            "/api/upload",
+            files={"file": ("notes.txt", "审计证据学习笔记".encode("utf-8"), "text/plain")},
+        ).json()
+        image = client.post(
+            "/api/upload",
+            files={"file": ("course-photo.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        )
+        details = client.get(f"/api/documents/{uploaded['document_id']}")
+        download = client.get(uploaded["download_url"])
+
+    assert image.status_code == 200
+    assert image.json()["indexed"] is False
+    assert details.status_code == 200
+    assert "审计证据学习笔记" in details.json()["content"]
+    assert download.status_code == 200
+
+
+def test_artifact_history_and_archive_to_knowledge_base():
+    with api() as client:
+        generated = client.post(
+            "/api/artifacts/outline",
+            json={"mode": "audit", "prompt": "审计风险模型"},
+        ).json()
+        history = client.get("/api/artifacts")
+        archived = client.post(
+            f"/api/artifacts/{generated['artifact_id']}/archive",
+            json={},
+        )
+
+    assert history.status_code == 200
+    assert any(item["id"] == generated["artifact_id"] for item in history.json())
+    assert archived.status_code == 200
+    assert archived.json()["scope"] == "generated"
+
+
+def test_import_timetable_from_xlsx():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["课程名称", "教师", "星期", "节次", "教室", "周次"])
+    sheet.append(["审计学基础", "王老师", "星期一", "1-2节", "敏达楼101", "1-16周"])
+    payload = BytesIO()
+    workbook.save(payload)
+    payload.seek(0)
+
+    with api() as client:
+        imported = client.post(
+            "/api/timetable/import",
+            files={
+                "file": (
+                    "课程表.xlsx",
+                    payload.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        timetable = client.get("/api/timetable")
+
+    assert imported.status_code == 200
+    assert imported.json()["imported_count"] == 1
+    assert timetable.status_code == 200
+    assert any(item["course_name"] == "审计学基础" for item in timetable.json())

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>智启校园教学管智能体</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section id="homePage" class="home-page">
+        <header class="home-topbar">
+          <div class="brand">
+            <span class="brand-mark">AI</span>
+            <div>
+              <strong>智启校园</strong>
+              <small>南京审计大学场景化智能体</small>
+            </div>
+          </div>
+          <div class="home-actions">
+            <span id="homeStatusBadge" class="status-pill">API 检查中</span>
+            <button id="homeLoginBtn" class="portal-btn" type="button">登录信息门户</button>
+          </div>
+        </header>
+
+        <section class="home-hero">
+          <p class="eyebrow">Campus Agent</p>
+          <h1>智启校园教学管智能体</h1>
+          <p class="hero-copy">面向学习全过程、教师教学和学生生活服务的统一入口。</p>
+          <div class="assistant-grid" aria-label="智能体入口">
+            <button class="assistant-card" type="button" data-open-mode="learning">
+              <span class="card-icon">学</span>
+              <strong>学习助手</strong>
+              <small>文档翻译、知识库建设、思维导图、审计学习实训</small>
+            </button>
+            <button class="assistant-card" type="button" data-open-mode="teaching">
+              <span class="card-icon">教</span>
+              <strong>教学助手</strong>
+              <small>教案设计、试题生成、课堂活动、Rubric 评价</small>
+            </button>
+            <button class="assistant-card" type="button" data-open-mode="affairs">
+              <span class="card-icon">管</span>
+              <strong>学生生活助手</strong>
+              <small>校园事务、奖学金、选课、办事流程和信息门户</small>
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <section id="assistantPage" class="assistant-page" hidden>
+        <header class="assistant-topbar">
+          <div class="top-left">
+            <button id="backHomeBtn" class="icon-btn" type="button" aria-label="返回首页">‹</button>
+            <div>
+              <h1 id="modeTitle">学生助手</h1>
+              <p id="modeSubtitle">学习全过程支持</p>
+            </div>
+          </div>
+          <div class="top-right">
+            <span id="statusBadge" class="api-service">API 服务</span>
+            <button id="loginBtn" class="portal-btn" type="button">登录信息门户</button>
+          </div>
+        </header>
+
+        <section id="chatStage" class="chat-stage">
+          <div class="assistant-greeting">
+            <span id="assistantLogo" class="assistant-logo">学</span>
+            <h2 id="welcomeTitle">你好，我是学生助手</h2>
+          </div>
+
+          <section id="messages" class="messages" aria-live="polite"></section>
+
+          <form id="chatForm" class="composer">
+            <textarea id="messageInput" rows="3" placeholder="向学生助手提问"></textarea>
+            <div class="composer-actions">
+              <div id="composerToolWrap" class="composer-tool-wrap">
+                <button class="composer-plus-btn" id="uploadTriggerBtn" type="button" aria-label="上传文件和更多工具">＋</button>
+                <span class="composer-tooltip">上传文件和更多工具</span>
+                <div id="composerToolMenu" class="composer-tool-menu" role="menu">
+                  <button type="button" data-composer-tool="files">
+                    <span class="menu-symbol">⌕</span>
+                    <span><strong>文件和图片</strong><small>上传课程资料</small></span>
+                  </button>
+                  <button type="button" data-composer-tool="phrases">
+                    <span class="menu-symbol">□</span>
+                    <span><strong>常用语</strong><small>快速填写场景指令</small></span>
+                  </button>
+                  <button class="menu-disabled" type="button" disabled>
+                    <span class="menu-symbol">◇</span>
+                    <span><strong>插件 <em>内测中</em></strong><small>扩展外部服务</small></span>
+                  </button>
+                  <button class="menu-disabled" type="button" disabled>
+                    <span class="menu-symbol">▱</span>
+                    <span><strong>技能 <em>内测中</em></strong><small>调用专业工作流</small></span>
+                  </button>
+                  <button type="button" data-composer-tool="web">
+                    <span class="menu-symbol">◎</span>
+                    <span><strong>联网搜索</strong><small id="webSearchState">未开启</small></span>
+                  </button>
+                </div>
+              </div>
+              <button class="mini-action" id="newSessionBtn" type="button">新对话</button>
+              <button id="sendBtn" class="send-btn" type="submit" aria-label="发送">↑</button>
+            </div>
+          </form>
+
+          <section id="featureWorkbench" class="feature-workbench" hidden>
+            <div class="active-tool-header">
+              <div id="activeToolChip" class="active-tool-chip">
+                <span id="activeToolSymbol">译</span>
+                <strong id="activeToolName">翻译</strong>
+              </div>
+              <button id="exitFeatureBtn" class="feature-exit-btn" type="button" aria-label="退出当前功能">×</button>
+            </div>
+
+            <section id="translateWorkbench" class="workbench-panel" hidden>
+              <div class="sub-tool-tabs" role="tablist" aria-label="翻译类型">
+                <button class="sub-tool-tab active" type="button" data-translate-tab="instant">即时翻译</button>
+                <button class="sub-tool-tab" type="button" data-translate-tab="document">文档翻译</button>
+              </div>
+
+              <div class="translate-shell" data-translate-panel="instant">
+                <div class="translate-language-bar">
+                  <label>
+                    <span>源语言</span>
+                    <select id="instantSourceLang">
+                      <option value="auto">检测源语言</option>
+                      <option value="中文">中文</option>
+                      <option value="英语">英语</option>
+                      <option value="日语">日语</option>
+                    </select>
+                  </label>
+                  <button id="swapTranslateLangBtn" class="swap-lang-btn" type="button" aria-label="切换翻译方向">⇄</button>
+                  <label>
+                    <span>目标语言</span>
+                    <select id="instantTargetLang">
+                      <option value="中文">中文</option>
+                      <option value="英语">英语（英式）</option>
+                      <option value="日语">日语</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="instant-translate-grid">
+                  <label class="translate-pane">
+                    <span>键入翻译。</span>
+                    <textarea id="instantSourceText" rows="10" placeholder="输入或粘贴要翻译的审计课程内容"></textarea>
+                    <button id="instantTranslateBtn" class="primary-btn" type="button">开始翻译</button>
+                  </label>
+                  <div class="translate-pane translate-output-pane">
+                    <span>译文</span>
+                    <div id="instantTargetText" class="translation-output">翻译结果会显示在这里。</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="document-translate-panel" data-translate-panel="document" hidden>
+                <div class="document-translate-card">
+                  <div>
+                    <p class="eyebrow">PDFMathTranslate Reference</p>
+                    <h3>文档翻译</h3>
+                    <p>上传 PDF、Word、Markdown 或文本文件，导出中文 DOCX 译文，并可继续生成中英双语要点总结。</p>
+                  </div>
+                  <button id="documentTranslateUploadBtn" class="primary-btn" type="button">上传并翻译文档</button>
+                </div>
+                <div id="documentTranslateResult" class="document-translate-result">
+                  <div class="empty-state">尚未上传文档。</div>
+                </div>
+                <div class="document-summary-actions">
+                  <button id="documentSummaryBtn" class="secondary-btn" type="button" disabled>生成双语要点总结</button>
+                  <button id="documentArchiveBtn" class="secondary-btn" type="button" disabled>加入知识库</button>
+                </div>
+                <div id="documentSummaryResult" class="document-summary-result"></div>
+              </div>
+            </section>
+
+            <section id="mindmapWorkbench" class="workbench-panel" hidden>
+              <div class="mindmap-shell">
+                <aside class="mindmap-sidebar">
+                  <p class="eyebrow">simple-mind-map Workspace</p>
+                  <h3>思维导图生成与手绘</h3>
+                  <label>
+                    中心主题
+                    <input id="mindmapTopicInput" type="text" placeholder="例如：审计风险模型复习框架" />
+                  </label>
+                  <button id="mindmapGenerateBtn" class="primary-btn" type="button">AI 生成思维导图</button>
+                  <label>
+                    手动添加节点
+                    <input id="mindmapBranchInput" type="text" placeholder="输入一个分支或知识点" />
+                  </label>
+                  <div class="mindmap-actions">
+                    <button id="mindmapAddBranchBtn" class="secondary-btn" type="button">添加节点</button>
+                    <button id="mindmapClearBtn" class="ghost-btn" type="button">清空画布</button>
+                  </div>
+                  <div id="mindmapBranchList" class="mindmap-branch-list"></div>
+                  <div class="mindmap-save-actions">
+                    <button id="mindmapArchiveBtn" class="secondary-btn" type="button" disabled>加入知识库</button>
+                  </div>
+                </aside>
+                <div class="mindmap-canvas-wrap">
+                  <div class="mindmap-toolbar">
+                    <span>专业画布</span>
+                    <span>支持 AI 生成、手动绘制、历史保存</span>
+                  </div>
+                  <svg id="mindmapCanvas" class="mindmap-canvas" viewBox="0 0 920 560" role="img" aria-label="思维导图画布"></svg>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="quick-tool-strip" aria-label="常用功能">
+            <button id="deepResearchBtn" class="quick-tool" type="button" aria-pressed="false">
+              <span class="quick-symbol">⌁</span>
+              <span><strong>深度研究</strong><small>多步骤分析</small></span>
+            </button>
+            <button class="quick-tool" type="button" data-feature="translate">
+              <span class="quick-symbol">译</span>
+              <span><strong>翻译</strong><small>文本翻译和文档翻译</small></span>
+            </button>
+            <button class="quick-tool" type="button" data-feature="mindmap">
+              <span class="quick-symbol">图</span>
+              <span><strong>思维导图</strong><small>课程结构与复习框架</small></span>
+            </button>
+            <button class="quick-tool" type="button" data-feature="quiz">
+              <span class="quick-symbol">测</span>
+              <span><strong>练习检测</strong><small>题目、答案与解析</small></span>
+            </button>
+          </section>
+
+          <button class="knowledge-feature-entry" type="button" data-feature="knowledge">
+            <span class="knowledge-entry-mark">知</span>
+            <span>
+              <strong>知识库建设</strong>
+              <small>统一管理课程资料、历史生成内容与个人课程表</small>
+            </span>
+            <span class="knowledge-entry-arrow">›</span>
+          </button>
+
+          <section class="utility-panel">
+            <div>
+              <strong>资料状态</strong>
+              <p id="apiStatus">正在读取状态...</p>
+            </div>
+            <div>
+              <strong>最近资料</strong>
+              <div id="documentList" class="compact-list"></div>
+            </div>
+            <div>
+              <strong>最近对话</strong>
+              <div id="sessionList" class="compact-list"></div>
+            </div>
+            <div>
+              <strong>最近调用</strong>
+              <div id="callList" class="call-list"></div>
+            </div>
+          </section>
+        </section>
+
+        <section id="knowledgeWorkspace" class="knowledge-workspace" hidden>
+          <div class="knowledge-heading">
+            <div>
+              <button id="backToChatBtn" class="text-back-btn" type="button">‹ 返回学生助手</button>
+              <p class="eyebrow">Personal Knowledge Hub</p>
+              <h2>我的学习知识库</h2>
+              <p>统一保存课程资料、思维导图、文件大纲、练习测验和个人课程表。</p>
+            </div>
+            <div class="knowledge-actions">
+              <button id="knowledgeUploadBtn" class="primary-btn" type="button">上传学习资料</button>
+              <button id="timetableImportBtn" class="secondary-btn" type="button">一键导入课程表</button>
+            </div>
+          </div>
+
+          <div class="knowledge-stats">
+            <div><strong id="knowledgeDocCount">0</strong><span>学习资料</span></div>
+            <div><strong id="knowledgeArtifactCount">0</strong><span>生成内容</span></div>
+            <div><strong id="knowledgeCourseCount">0</strong><span>课程记录</span></div>
+          </div>
+
+          <div class="knowledge-tabs" role="tablist">
+            <button class="knowledge-tab active" type="button" data-knowledge-tab="documents">学习资料</button>
+            <button class="knowledge-tab" type="button" data-knowledge-tab="artifacts">生成内容</button>
+            <button class="knowledge-tab" type="button" data-knowledge-tab="timetable">我的课程表</button>
+          </div>
+
+          <section class="knowledge-tab-panel" data-knowledge-panel="documents">
+            <div class="section-title">
+              <div><h3>历史上传文件</h3><p>支持 Word、PDF、Excel、文本与常见图片格式。</p></div>
+              <button id="inlineUploadBtn" class="secondary-btn" type="button">添加资料</button>
+            </div>
+            <div id="knowledgeDocumentList" class="asset-list"></div>
+          </section>
+
+          <section class="knowledge-tab-panel" data-knowledge-panel="artifacts" hidden>
+            <div class="section-title">
+              <div><h3>历史生成内容</h3><p>思维导图、文件大纲和练习测验会自动保留。</p></div>
+              <button id="createOutlineBtn" class="secondary-btn" type="button">生成文件大纲</button>
+            </div>
+            <div id="knowledgeArtifactList" class="asset-list"></div>
+          </section>
+
+          <section class="knowledge-tab-panel" data-knowledge-panel="timetable" hidden>
+            <div class="section-title">
+              <div><h3>我的课程表</h3><p>上传带表头的 XLSX 或 CSV，可一次导入课程、教师、教室、星期、节次和周次。</p></div>
+              <button id="inlineTimetableBtn" class="primary-btn" type="button">导入课程表</button>
+            </div>
+            <div class="table-wrap">
+              <table class="timetable-table">
+                <thead><tr><th>课程</th><th>星期</th><th>节次</th><th>教师</th><th>教室</th><th>周次</th></tr></thead>
+                <tbody id="timetableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <input id="fileInput" type="file" multiple accept=".txt,.md,.pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg,.webp" hidden />
+        <input id="translateFileInput" type="file" accept=".txt,.md,.pdf,.docx" hidden />
+        <input id="timetableFileInput" type="file" accept=".xlsx,.csv" hidden />
+      </section>
+    </main>
+
+    <div id="loginModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <button id="loginCloseBtn" class="modal-close" type="button" aria-label="关闭登录">×</button>
+        <p class="eyebrow">Campus SSO Mock</p>
+        <h2 id="loginTitle">南京审计大学统一身份认证</h2>
+        <p class="modal-copy">当前是虚拟登录接口，用于预留后续接入校园信息门户。</p>
+        <a id="authPortalLink" class="portal-link" href="https://my.nau.edu.cn/index.html#/" target="_blank" rel="noreferrer">
+          打开南京审计大学信息门户
+        </a>
+        <form id="loginForm" class="login-form">
+          <label>
+            学号 / 工号
+            <input id="loginUserInput" type="text" placeholder="请输入学号或工号" autocomplete="username" />
+          </label>
+          <label>
+            密码
+            <input id="loginPassInput" type="password" placeholder="虚拟密码，任意输入" autocomplete="current-password" />
+          </label>
+          <button type="submit">虚拟登录</button>
+        </form>
+        <p id="loginStatus" class="login-status">未登录</p>
+        <button id="logoutBtn" class="ghost-btn" type="button">退出虚拟登录</button>
+      </div>
+    </div>
+
+    <div id="assetViewerModal" class="modal" hidden>
+      <div class="modal-card asset-viewer-card" role="dialog" aria-modal="true" aria-labelledby="assetViewerTitle">
+        <button id="assetViewerCloseBtn" class="modal-close" type="button" aria-label="关闭预览">×</button>
+        <div class="asset-viewer-heading">
+          <div>
+            <p class="eyebrow">Knowledge Preview</p>
+            <h2 id="assetViewerTitle">资料预览</h2>
+          </div>
+          <a id="assetDownloadLink" class="secondary-btn" href="#" target="_blank" rel="noreferrer">下载原文件</a>
+        </div>
+        <div id="assetViewerBody" class="asset-viewer-body"></div>
+      </div>
+    </div>
+
+    <div id="commonPhraseModal" class="modal" hidden>
+      <div class="modal-card phrase-modal-card" role="dialog" aria-modal="true" aria-labelledby="commonPhraseTitle">
+        <button id="commonPhraseCloseBtn" class="modal-close" type="button" aria-label="关闭常用语">×</button>
+        <div class="phrase-modal-heading">
+          <div>
+            <p class="eyebrow">Prompt Library</p>
+            <h2 id="commonPhraseTitle">常用语</h2>
+          </div>
+          <button id="addCommonPhraseBtn" class="secondary-btn" type="button">＋ 添加常用语</button>
+        </div>
+        <label class="phrase-search">
+          <span>⌕</span>
+          <input id="commonPhraseSearch" type="search" placeholder="搜索常用语" />
+        </label>
+        <div id="commonPhraseContent" class="phrase-content"></div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

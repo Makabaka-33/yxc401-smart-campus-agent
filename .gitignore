@@ -1,0 +1,13 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+data/app.db
+data/uploads/
+data/reports/
+data/logs/
+data/generated/
+output/playwright/
+.DS_Store
+Thumbs.db
