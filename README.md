@@ -1,6 +1,10 @@
 # 智启校园智能体
 
-面向“AI赋能教·学·管”竞赛的最小可运行项目。
+面向”AI赋能教·学·管”竞赛的最小可运行项目。
+
+原始项目：[yxc401/smart-campus-agent](https://github.com/yxc401/smart-campus-agent)
+
+## 项目简介
 
 这个版本参考 `deepsearch-agents` 的思路，但先做小白能跑通的闭环：
 
@@ -12,7 +16,7 @@
 ## 运行步骤
 
 ```powershell
-cd C:\Users\11831\Documents\智能体启动\smart-campus-agent
+cd smart-campus-agent
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
 Copy-Item .env.example .env
@@ -51,4 +55,3 @@ MOCK_MODE=0
 - 生成学习计划 PDF/Word
 - API 调用记录
 - 演示视频脚本
-
