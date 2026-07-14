@@ -224,6 +224,9 @@ const affairsDataUpdatedAt = document.querySelector("#affairsDataUpdatedAt");
 const affairsDetailModal = document.querySelector("#affairsDetailModal");
 const affairsDetailCloseBtn = document.querySelector("#affairsDetailCloseBtn");
 const affairsDetailBody = document.querySelector("#affairsDetailBody");
+const affairsSidebar = document.querySelector("#affairsSidebar");
+const affairsSettingsBtn = document.querySelector("#affairsSettingsBtn");
+const affairsNotificationBtn = document.querySelector("#affairsNotificationBtn");
 
 let currentMode = "learning";
 let currentSessionId = null;
@@ -251,13 +254,35 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
   button.addEventListener("click", () => runFeature(button.dataset.feature));
 });
 
-backHomeBtn.addEventListener("click", () => {
+function showHomePage() {
   assistantPage.hidden = true;
   homePage.hidden = false;
+  assistantPage.classList.remove("affairs-mode");
   knowledgeWorkspace.hidden = true;
   chatStage.hidden = false;
   affairsDashboard.hidden = true;
   affairsProfileSwitch.hidden = true;
+  affairsSidebar.hidden = true;
+  affairsNotificationBtn.hidden = true;
+}
+
+backHomeBtn.addEventListener("click", showHomePage);
+
+affairsSidebar.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-affairs-nav]");
+  if (!button) return;
+  const target = button.dataset.affairsNav;
+  if (target === "home") showHomePage();
+  else openAssistant(target);
+});
+
+affairsSettingsBtn.addEventListener("click", () => {
+  loginModal.hidden = false;
+  loginUserInput.focus();
+});
+
+affairsNotificationBtn.addEventListener("click", () => {
+  document.querySelector("#affairsNoticesTitle")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 affairsProfileSelect.addEventListener("change", () => {
@@ -545,9 +570,12 @@ function openAssistant(mode) {
   assistantPage.hidden = false;
   knowledgeWorkspace.hidden = true;
   const isAffairs = currentMode === "affairs";
+  assistantPage.classList.toggle("affairs-mode", isAffairs);
   chatStage.hidden = isAffairs;
   affairsDashboard.hidden = !isAffairs;
   affairsProfileSwitch.hidden = !isAffairs;
+  affairsSidebar.hidden = !isAffairs;
+  affairsNotificationBtn.hidden = !isAffairs;
   modeTitle.textContent = config.title;
   modeSubtitle.textContent = config.subtitle;
   assistantLogo.textContent = config.logo;
@@ -1867,6 +1895,4 @@ async function fetchJson(url) {
 }
 
 loadAuthPortal();
-refreshAll().catch(() => {
-  setApiLabel(true);
-});
+openAssistant("affairs");

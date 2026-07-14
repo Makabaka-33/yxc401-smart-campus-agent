@@ -14,6 +14,7 @@ def test_student_affairs_dashboard_assets_are_served():
     with api() as client:
         page = client.get("/")
         data = client.get("/static/affairs-data.js")
+        app_script = client.get("/static/app.js")
 
     assert page.status_code == 200
     assert "affairsDashboard" in page.text
@@ -23,6 +24,8 @@ def test_student_affairs_dashboard_assets_are_served():
     assert "undergraduate" in data.text
     assert "graduate" in data.text
     assert "官方已核验" in data.text
+    assert app_script.status_code == 200
+    assert 'openAssistant("affairs")' in app_script.text
 
 
 def test_chat_creates_session_and_logs_call():

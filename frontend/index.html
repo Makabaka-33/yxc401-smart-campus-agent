@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智启校园教学管智能体</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260714-2" />
   </head>
   <body>
     <main class="app-shell">
@@ -49,6 +49,30 @@
       </section>
 
       <section id="assistantPage" class="assistant-page" hidden>
+        <aside id="affairsSidebar" class="affairs-sidebar" hidden>
+          <div class="affairs-side-brand">
+            <span>智</span>
+            <strong>智启校园</strong>
+          </div>
+          <nav class="affairs-side-nav" aria-label="智能体导航">
+            <button type="button" data-affairs-nav="home">
+              <span>⌂</span><b>首页工作台</b>
+            </button>
+            <button type="button" data-affairs-nav="learning">
+              <span>▣</span><b>学习助手</b>
+            </button>
+            <button type="button" data-affairs-nav="teaching">
+              <span>✎</span><b>教学助手</b>
+            </button>
+            <button class="active" type="button" data-affairs-nav="affairs" aria-current="page">
+              <span>⌂</span><b>事务助手</b>
+            </button>
+          </nav>
+          <button id="affairsSettingsBtn" class="affairs-side-settings" type="button">
+            <span>⚙</span><b>设置与帮助</b>
+          </button>
+        </aside>
+
         <header class="assistant-topbar">
           <div class="top-left">
             <button id="backHomeBtn" class="icon-btn" type="button" aria-label="返回首页">‹</button>
@@ -58,6 +82,9 @@
             </div>
           </div>
           <div class="top-right">
+            <button id="affairsNotificationBtn" class="affairs-notification-btn" type="button" aria-label="查看校园通知" hidden>
+              ♢<span>3</span>
+            </button>
             <label id="affairsProfileSwitch" class="affairs-profile-switch" hidden>
               <span id="affairsProfileAvatar" class="affairs-profile-avatar">张</span>
               <span class="affairs-profile-copy">
@@ -468,7 +495,7 @@
       </div>
     </div>
 
-    <script src="/static/affairs-data.js"></script>
-    <script src="/static/app.js"></script>
+    <script src="/static/affairs-data.js?v=20260714-2"></script>
+    <script src="/static/app.js?v=20260714-2"></script>
   </body>
 </html>
