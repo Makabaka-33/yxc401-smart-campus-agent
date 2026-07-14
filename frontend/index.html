@@ -41,7 +41,7 @@
             </button>
             <button class="assistant-card" type="button" data-open-mode="affairs">
               <span class="card-icon">管</span>
-              <strong>学生生活助手</strong>
+              <strong>事务助手</strong>
               <small>校园事务、奖学金、选课、办事流程和信息门户</small>
             </button>
           </div>
@@ -58,6 +58,17 @@
             </div>
           </div>
           <div class="top-right">
+            <label id="affairsProfileSwitch" class="affairs-profile-switch" hidden>
+              <span id="affairsProfileAvatar" class="affairs-profile-avatar">张</span>
+              <span class="affairs-profile-copy">
+                <strong id="affairsProfileName">张同学</strong>
+                <small id="affairsProfileMeta">本科生 · 学生</small>
+              </span>
+              <select id="affairsProfileSelect" aria-label="切换学生演示档案">
+                <option value="undergraduate">张同学 · 本科生</option>
+                <option value="graduate">李同学 · 研究生</option>
+              </select>
+            </label>
             <span id="statusBadge" class="api-service">API 服务</span>
             <button id="loginBtn" class="portal-btn" type="button">登录信息门户</button>
           </div>
@@ -256,6 +267,81 @@
           </section>
         </section>
 
+        <section id="affairsDashboard" class="affairs-dashboard" hidden>
+          <section class="affairs-hero" aria-labelledby="affairsGreetingTitle">
+            <p class="affairs-eyebrow">南京审计大学 · 学生事务助手</p>
+            <div class="affairs-greeting-row">
+              <div>
+                <h2 id="affairsGreetingTitle">你好，张同学 <span aria-hidden="true">👋</span></h2>
+                <p id="affairsGreetingText">今天有什么校园事务需要处理，尽管告诉我吧！</p>
+              </div>
+              <div id="affairsProfileFacts" class="affairs-profile-facts"></div>
+            </div>
+
+            <form id="affairsSearchForm" class="affairs-search">
+              <label class="sr-only" for="affairsSearchInput">输入事务名称或问题</label>
+              <input id="affairsSearchInput" type="search" placeholder="输入事务名称或直接描述问题，例如：我要打印成绩单" autocomplete="off" />
+              <button type="submit" aria-label="发送事务问题">➤</button>
+            </form>
+            <div id="affairsQuickQuestions" class="affairs-quick-questions" aria-label="常用问题"></div>
+
+            <div id="affairsAgentResult" class="affairs-agent-result" hidden aria-live="polite">
+              <div class="affairs-agent-result-head">
+                <span class="affairs-agent-mark">AI</span>
+                <strong>事务助手答复</strong>
+                <button id="affairsAgentResultClose" type="button" aria-label="收起答复">×</button>
+              </div>
+              <div id="affairsAgentResultBody" class="markdown-body"></div>
+            </div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsTasksTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol green">▣</span><h3 id="affairsTasksTitle">我的事务</h3></div>
+              <span id="affairsTaskCount" class="module-link"></span>
+            </div>
+            <div id="affairsTaskGrid" class="affairs-task-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsPrioritiesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol red">◆</span><h3 id="affairsPrioritiesTitle">近期重点</h3></div>
+              <span class="module-link">身份匹配推荐</span>
+            </div>
+            <div id="affairsPriorityGrid" class="affairs-priority-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsServicesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol blue">▦</span><h3 id="affairsServicesTitle">校园服务</h3></div>
+              <span class="module-link">官方入口优先</span>
+            </div>
+            <div id="affairsServiceGrid" class="affairs-service-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsNoticesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol purple">●</span><h3 id="affairsNoticesTitle">校园消息速览</h3></div>
+              <span class="module-link">按学段推送</span>
+            </div>
+            <div id="affairsNoticeList" class="affairs-notice-list"></div>
+          </section>
+
+          <section class="affairs-module affairs-recent-module" aria-labelledby="affairsRecentTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol gray">↻</span><h3 id="affairsRecentTitle">最近对话</h3></div>
+            </div>
+            <div id="affairsRecentList" class="affairs-recent-list"></div>
+          </section>
+
+          <footer class="affairs-data-note">
+            <span><i class="source-dot official"></i>官方已核验</span>
+            <span><i class="source-dot demo"></i>演示模拟</span>
+            <span><i class="source-dot pending"></i>待学校确认</span>
+            <small id="affairsDataUpdatedAt"></small>
+          </footer>
+        </section>
+
         <section id="knowledgeWorkspace" class="knowledge-workspace" hidden>
           <div class="knowledge-heading">
             <div>
@@ -318,6 +404,13 @@
       </section>
     </main>
 
+    <div id="affairsDetailModal" class="modal" hidden>
+      <div class="modal-card affairs-detail-card" role="dialog" aria-modal="true" aria-labelledby="affairsDetailTitle">
+        <button id="affairsDetailCloseBtn" class="modal-close" type="button" aria-label="关闭事务详情">×</button>
+        <div id="affairsDetailBody"></div>
+      </div>
+    </div>
+
     <div id="loginModal" class="modal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <button id="loginCloseBtn" class="modal-close" type="button" aria-label="关闭登录">×</button>
@@ -375,6 +468,7 @@
       </div>
     </div>
 
+    <script src="/static/affairs-data.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

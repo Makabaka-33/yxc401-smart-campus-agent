@@ -10,6 +10,21 @@ def api() -> TestClient:
     return TestClient(app)
 
 
+def test_student_affairs_dashboard_assets_are_served():
+    with api() as client:
+        page = client.get("/")
+        data = client.get("/static/affairs-data.js")
+
+    assert page.status_code == 200
+    assert "affairsDashboard" in page.text
+    assert "事务助手" in page.text
+    assert "/static/affairs-data.js" in page.text
+    assert data.status_code == 200
+    assert "undergraduate" in data.text
+    assert "graduate" in data.text
+    assert "官方已核验" in data.text
+
+
 def test_chat_creates_session_and_logs_call():
     with api() as client:
         response = client.post(
