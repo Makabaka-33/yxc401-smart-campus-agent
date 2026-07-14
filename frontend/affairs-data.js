@@ -93,7 +93,7 @@ window.AFFAIRS_DEMO_DATA = {
     },
     graduate: {
       id: "graduate",
-      name: "李同学",
+      name: "江同学",
       role: "学生",
       level: "研究生",
       grade: "2025级",
