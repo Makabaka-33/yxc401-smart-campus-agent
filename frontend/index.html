@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智启校园教学管智能体</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/static/styles.css?v=20260714-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260714-3" />
   </head>
   <body>
     <main class="app-shell">
@@ -349,7 +349,10 @@
           <section class="affairs-module" aria-labelledby="affairsNoticesTitle">
             <div class="affairs-module-heading">
               <div><span class="module-symbol purple">●</span><h3 id="affairsNoticesTitle">校园消息速览</h3></div>
-              <span class="module-link">按学段推送</span>
+              <div class="affairs-news-tools">
+                <span id="affairsNoticeMeta" class="module-link">正在按身份与时间更新</span>
+                <button id="affairsNewsRefreshBtn" type="button">↻ 刷新资讯</button>
+              </div>
             </div>
             <div id="affairsNoticeList" class="affairs-notice-list"></div>
           </section>
@@ -495,7 +498,7 @@
       </div>
     </div>
 
-    <script src="/static/affairs-data.js?v=20260714-2"></script>
-    <script src="/static/app.js?v=20260714-2"></script>
+    <script src="/static/affairs-data.js?v=20260714-3"></script>
+    <script src="/static/app.js?v=20260714-3"></script>
   </body>
 </html>

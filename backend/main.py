@@ -12,9 +12,11 @@ import sqlite3
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import jieba
@@ -119,6 +121,140 @@ AUTH_PORTAL = {
     "portal_url": "https://my.nau.edu.cn/index.html#/",
     "auth_type": "mock",
 }
+
+
+AFFAIRS_NEWS_SOURCES = [
+    {
+        "name": "教务处",
+        "url": "https://jw.nau.edu.cn/",
+        "icon": "📘",
+        "audiences": ["undergraduate", "graduate"],
+    },
+    {
+        "name": "研究生院",
+        "url": "https://gs.nau.edu.cn/?s=103",
+        "icon": "🎓",
+        "audiences": ["graduate"],
+    },
+    {
+        "name": "学生工作处",
+        "url": "https://xgc.nau.edu.cn/",
+        "icon": "🧑‍🎓",
+        "audiences": ["undergraduate", "graduate"],
+    },
+    {
+        "name": "图书馆",
+        "url": "https://lib.nau.edu.cn/",
+        "icon": "📚",
+        "audiences": ["undergraduate", "graduate"],
+    },
+]
+
+
+AFFAIRS_NEWS_FALLBACK = [
+    {
+        "id": "jw-textbook-20260710",
+        "title": "关于2026—2027学年第一学期普本学生教材选购工作的通知",
+        "summary": "本科生可在学生个人信息系统选购下学期教材，开放时间为7月12日8:00至7月22日8:00。",
+        "publishedDate": "2026-07-10",
+        "deadline": "2026-07-22",
+        "sourceName": "教务处",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0710/c8013a160596/page.htm",
+        "icon": "📘",
+        "audiences": ["undergraduate"],
+    },
+    {
+        "id": "jw-micro-major-20260710",
+        "title": "关于公布2026年获得微专业证书学生名单的通知",
+        "summary": "教务处公布2026年微专业证书学生名单，相关同学可查看具体名单与后续安排。",
+        "publishedDate": "2026-07-10",
+        "deadline": "",
+        "sourceName": "教务处",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0710/c8013a160579/page.htm",
+        "icon": "📘",
+        "audiences": ["undergraduate"],
+    },
+    {
+        "id": "jw-exam-schedule-20260601",
+        "title": "关于发布2025-2026学年第二学期期末考试日程安排的通知",
+        "summary": "本科生可查询期末考试日程、缓考申请操作流程及考试注意事项。",
+        "publishedDate": "2026-06-01",
+        "deadline": "",
+        "sourceName": "教务处",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0601/c8013a158290/page.htm",
+        "icon": "📝",
+        "audiences": ["undergraduate"],
+    },
+    {
+        "id": "lib-ai-lecture-20260618",
+        "title": "利用AI工具与多模态信息辅助学习与科研",
+        "summary": "图书馆面向学生发布的线上信息素养讲座，可查看讲座内容与参与方式。",
+        "publishedDate": "2026-06-18",
+        "deadline": "2026-06-25",
+        "sourceName": "图书馆",
+        "sourceUrl": "https://lib.nau.edu.cn/2026/0618/c7014a159260/page.htm",
+        "icon": "📚",
+        "audiences": ["undergraduate", "graduate"],
+    },
+    {
+        "id": "gs-graduate-recommendation-20260612",
+        "title": "关于2026届优秀毕业研究生拟推荐名单的公示",
+        "summary": "研究生院发布优秀毕业研究生拟推荐名单，毕业年级可查看公示要求。",
+        "publishedDate": "2026-06-12",
+        "deadline": "",
+        "sourceName": "研究生院",
+        "sourceUrl": "https://gs.nau.edu.cn/2026/0612/c4414a158908/page.htm",
+        "icon": "🎓",
+        "audiences": ["graduate"],
+    },
+    {
+        "id": "gs-scholarship-20260511",
+        "title": "关于2026年审计长奖学金（研究生）评审情况的公示",
+        "summary": "研究生院发布审计长奖学金评审结果，研究生可查看评审与公示信息。",
+        "publishedDate": "2026-05-11",
+        "deadline": "",
+        "sourceName": "研究生院",
+        "sourceUrl": "https://gs.nau.edu.cn/2026/0511/c4414a157308/page.htm",
+        "icon": "🎓",
+        "audiences": ["graduate"],
+    },
+    {
+        "id": "gs-teaching-result-20260609",
+        "title": "关于2026年高等教育（研究生）国家教学成果奖推荐申报的公示",
+        "summary": "研究生院发布研究生教育教学成果推荐申报公示，可查看项目与公示信息。",
+        "publishedDate": "2026-06-09",
+        "deadline": "2026-06-15",
+        "sourceName": "研究生院",
+        "sourceUrl": "https://gs.nau.edu.cn/2026/0609/c10680a158567/page.htm",
+        "icon": "🎓",
+        "audiences": ["graduate"],
+    },
+    {
+        "id": "xgc-work-study-20260317",
+        "title": "关于发布2026年春学期勤工助学岗位需求的通知",
+        "summary": "符合条件的学生可在学工系统提交岗位申请，并按操作指南完成审核流程。",
+        "publishedDate": "2026-03-17",
+        "deadline": "",
+        "sourceName": "学生工作处",
+        "sourceUrl": "https://xgc.nau.edu.cn/_t181/2026/0317/c3439a154989/page.htm",
+        "icon": "🧑‍🎓",
+        "audiences": ["undergraduate", "graduate"],
+    },
+    {
+        "id": "jw-cet-20260318",
+        "title": "2026年上半年全国大学英语四、六级考试报名通知",
+        "summary": "通知适用于含研究生在内的全体在校生，包含报名对象、时间、入口和资格核对要求。",
+        "publishedDate": "2026-03-18",
+        "deadline": "2026-03-30",
+        "sourceName": "教务处",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0318/c8013a155043/page.htm",
+        "icon": "CET",
+        "audiences": ["undergraduate", "graduate"],
+    },
+]
+
+
+AFFAIRS_NEWS_CACHE: dict[str, tuple[float, list[dict[str, Any]], int]] = {}
 
 
 SYSTEM_PROMPTS: dict[str, str] = {
@@ -269,6 +405,34 @@ def status() -> dict[str, Any]:
         "document_count": document_count,
         "chunk_count": chunk_count,
         "last_call": dict(last_call) if last_call else None,
+    }
+
+
+@app.get("/api/affairs/notices")
+async def list_affairs_notices(
+    profile: Literal["undergraduate", "graduate"] = "undergraduate",
+    grade: str = "",
+    limit: int = 6,
+    refresh: bool = False,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(limit, 12))
+    cache_key = f"{profile}:{grade.strip()}"
+    cached = AFFAIRS_NEWS_CACHE.get(cache_key)
+    if cached and not refresh and time.monotonic() - cached[0] < 900:
+        ranked, live_count = cached[1], cached[2]
+    else:
+        live_items = await fetch_affairs_live_news(profile)
+        ranked = rank_affairs_news(profile, grade.strip(), live_items)
+        live_count = sum(1 for item in ranked if item.get("live"))
+        AFFAIRS_NEWS_CACHE[cache_key] = (time.monotonic(), ranked, live_count)
+
+    return {
+        "profile": profile,
+        "grade": grade.strip(),
+        "generatedAt": now_iso(),
+        "liveCount": live_count,
+        "fallbackUsed": live_count == 0,
+        "items": ranked[:safe_limit],
     }
 
 
@@ -1876,6 +2040,210 @@ def record_api_call(
 def summarize(text: str, limit: int = 160) -> str:
     compact = re.sub(r"\s+", " ", text).strip()
     return compact[:limit]
+
+
+def clean_affairs_news_text(value: str) -> str:
+    without_tags = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\s+", " ", unescape(without_tags)).strip()
+
+
+def affairs_news_date(article_url: str, context: str = "") -> date | None:
+    path_match = re.search(r"/(20\d{2})/(\d{2})(\d{2})/", urlparse(article_url).path)
+    if path_match:
+        try:
+            return date(int(path_match.group(1)), int(path_match.group(2)), int(path_match.group(3)))
+        except ValueError:
+            return None
+    context_match = re.search(r"(20\d{2})[./年-](\d{1,2})[./月-](\d{1,2})日?", context)
+    if not context_match:
+        return None
+    try:
+        return date(int(context_match.group(1)), int(context_match.group(2)), int(context_match.group(3)))
+    except ValueError:
+        return None
+
+
+def affairs_news_summary(title: str, source_name: str) -> str:
+    summaries = [
+        (("教材", "选购"), "查看教材选购对象、开放时间、操作路径和逾期处理要求。"),
+        (("考试", "考情", "四六级"), "查看考试安排、报名节点、资格要求或考试注意事项。"),
+        (("奖学金", "助学", "资助"), "查看奖助项目的适用对象、评审结果、材料和时间节点。"),
+        (("课程", "课表", "培养"), "查看课程、课表或培养环节的对象范围和具体安排。"),
+        (("图书", "讲座", "数据库"), "查看图书馆服务、资源或活动的内容、时间和参与方式。"),
+        (("毕业", "学位", "论文"), "查看毕业、学位或论文相关工作的对象、材料和时间安排。"),
+        (("勤工", "岗位"), "查看勤工助学岗位、申请条件和线上办理流程。"),
+    ]
+    for keywords, summary in summaries:
+        if any(keyword in title for keyword in keywords):
+            return summary
+    return f"来自{source_name}的官方文章，点击查看适用对象、完整要求和时间节点。"
+
+
+def extract_affairs_news(html_text: str, source: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    anchor_pattern = re.compile(
+        r"<a\b[^>]*?href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for match in anchor_pattern.finditer(html_text):
+        title = clean_affairs_news_text(match.group(2))
+        if len(title) < 8:
+            continue
+        article_url = urljoin(source["url"], unescape(match.group(1)).strip())
+        parsed = urlparse(article_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            continue
+        if not parsed.hostname.endswith(".nau.edu.cn") or "page.htm" not in parsed.path:
+            continue
+        if article_url in seen:
+            continue
+        context = clean_affairs_news_text(
+            html_text[max(0, match.start() - 120) : min(len(html_text), match.end() + 260)]
+        )
+        published = affairs_news_date(article_url, context)
+        if not published:
+            continue
+        seen.add(article_url)
+        items.append(
+            {
+                "id": f"live-{hashlib.sha1(article_url.encode('utf-8')).hexdigest()[:12]}",
+                "title": title[:120],
+                "summary": affairs_news_summary(title, source["name"]),
+                "publishedDate": published.isoformat(),
+                "deadline": "",
+                "sourceName": source["name"],
+                "sourceUrl": article_url,
+                "icon": source["icon"],
+                "audiences": list(source["audiences"]),
+                "live": True,
+            }
+        )
+    return items
+
+
+async def fetch_affairs_live_news(profile: str) -> list[dict[str, Any]]:
+    sources = [source for source in AFFAIRS_NEWS_SOURCES if profile in source["audiences"]]
+
+    async def fetch_source(client: httpx.AsyncClient, source: dict[str, Any]) -> list[dict[str, Any]]:
+        try:
+            response = await client.get(source["url"])
+            response.raise_for_status()
+            return extract_affairs_news(response.text, source)
+        except Exception:
+            return []
+
+    timeout = httpx.Timeout(4.5, connect=3.0)
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 NAU-Smart-Campus-Agent/1.0"},
+    ) as client:
+        groups = await asyncio.gather(*(fetch_source(client, source) for source in sources))
+    return [item for group in groups for item in group]
+
+
+def affairs_news_score(item: dict[str, Any], profile: str, grade: str, today: date) -> float:
+    title = str(item.get("title", ""))
+    source = str(item.get("sourceName", ""))
+    audiences = item.get("audiences") or []
+    if profile not in audiences:
+        return -1000
+    if profile == "undergraduate" and "研究生" in title:
+        return -1000
+    if profile == "graduate" and any(word in title for word in ("本科", "普本", "微专业")):
+        return -1000
+
+    source_scores = {
+        "undergraduate": {"教务处": 48, "学生工作处": 38, "图书馆": 30, "研究生院": -100},
+        "graduate": {"研究生院": 52, "教务处": 30, "图书馆": 28, "学生工作处": 26},
+    }
+    score = float(source_scores.get(profile, {}).get(source, 10))
+    relevant_words = (
+        "通知", "公告", "公示", "报名", "考试", "课程", "课表", "教材", "奖学金",
+        "助学", "勤工", "图书", "借阅", "讲座", "毕业", "学位", "论文", "培养", "实习",
+    )
+    score += sum(4 for word in relevant_words if word in title)
+    if any(
+        word in title
+        for word in (
+            "党支部", "党建", "党总支", "成立大会", "工作会议", "教师", "采购",
+            "获批", "调研", "典礼", "仪式", "消防培训", "共建",
+        )
+    ):
+        score -= 80
+
+    audience_year_match = re.search(r"(20\d{2})级", title)
+    if audience_year_match and not grade.startswith(audience_year_match.group(1)):
+        score -= 70
+
+    admission_words = ("招生", "复试", "调剂", "拟录取", "初试", "新生")
+    if any(word in title for word in admission_words):
+        year_match = re.search(r"(20\d{2})级", title)
+        if not year_match or not grade.startswith(year_match.group(1)):
+            score -= 75
+
+    try:
+        published = date.fromisoformat(str(item["publishedDate"]))
+        age_days = (today - published).days
+        if age_days < -2 or age_days > 240:
+            return -1000
+        score += max(0, 90 - max(age_days, 0)) * 0.35
+    except (KeyError, TypeError, ValueError):
+        return -1000
+    return score
+
+
+def rank_affairs_news(profile: str, grade: str, live_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    today = date.today()
+    fallback_by_url = {
+        item["sourceUrl"]: dict(item, live=False)
+        for item in AFFAIRS_NEWS_FALLBACK
+        if profile in item.get("audiences", [])
+    }
+    merged_by_url = dict(fallback_by_url)
+    for live_item in live_items:
+        article_url = live_item["sourceUrl"]
+        if article_url in fallback_by_url:
+            merged_by_url[article_url] = {**live_item, **fallback_by_url[article_url], "live": True}
+        else:
+            merged_by_url[article_url] = live_item
+
+    ranked: list[dict[str, Any]] = []
+    level_label = "本科生" if profile == "undergraduate" else "研究生"
+    for item in merged_by_url.values():
+        score = affairs_news_score(item, profile, grade, today)
+        if score < 40:
+            continue
+        published = date.fromisoformat(item["publishedDate"])
+        age_days = max((today - published).days, 0)
+        freshness = "7天内发布" if age_days <= 7 else "近30天发布" if age_days <= 30 else "近期发布"
+        status_label = freshness
+        deadline_text = str(item.get("deadline", "")).strip()
+        if deadline_text:
+            try:
+                deadline = date.fromisoformat(deadline_text)
+                remaining = (deadline - today).days
+                if remaining < 0:
+                    status_label = "已截止"
+                elif remaining <= 7:
+                    status_label = f"剩余{remaining}天"
+                else:
+                    status_label = f"截止 {deadline.strftime('%m-%d')}"
+            except ValueError:
+                pass
+        ranked.append(
+            {
+                **item,
+                "matchReason": f"匹配{level_label} · {item['sourceName']}",
+                "freshness": freshness,
+                "statusLabel": status_label,
+                "sourceStatus": "官网实时" if item.get("live") else "官方已核验",
+                "score": round(score, 2),
+            }
+        )
+    ranked.sort(key=lambda item: (item["publishedDate"], item["score"]), reverse=True)
+    return ranked
 
 
 def sse(event: str, data: dict[str, Any]) -> str:

@@ -1,5 +1,6 @@
 from io import BytesIO
 
+from backend import main as main_module
 from backend.main import app
 from docx import Document
 from fastapi.testclient import TestClient
@@ -26,6 +27,33 @@ def test_student_affairs_dashboard_assets_are_served():
     assert "官方已核验" in data.text
     assert app_script.status_code == 200
     assert 'openAssistant("affairs")' in app_script.text
+
+
+def test_affairs_notices_use_identity_time_and_article_links(monkeypatch):
+    async def no_live_news(_profile: str):
+        return []
+
+    monkeypatch.setattr(main_module, "fetch_affairs_live_news", no_live_news)
+    main_module.AFFAIRS_NEWS_CACHE.clear()
+    with api() as client:
+        undergraduate = client.get(
+            "/api/affairs/notices",
+            params={"profile": "undergraduate", "grade": "2024级", "refresh": "true"},
+        )
+        graduate = client.get(
+            "/api/affairs/notices",
+            params={"profile": "graduate", "grade": "2025级", "refresh": "true"},
+        )
+
+    assert undergraduate.status_code == 200
+    assert graduate.status_code == 200
+    undergraduate_items = undergraduate.json()["items"]
+    graduate_items = graduate.json()["items"]
+    assert undergraduate_items[0]["publishedDate"] >= undergraduate_items[-1]["publishedDate"]
+    assert graduate_items[0]["publishedDate"] >= graduate_items[-1]["publishedDate"]
+    assert all("page.htm" in item["sourceUrl"] for item in undergraduate_items + graduate_items)
+    assert all("研究生" not in item["matchReason"] for item in undergraduate_items)
+    assert all("研究生" in item["matchReason"] for item in graduate_items)
 
 
 def test_chat_creates_session_and_logs_call():

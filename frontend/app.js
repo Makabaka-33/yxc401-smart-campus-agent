@@ -219,6 +219,8 @@ const affairsTaskGrid = document.querySelector("#affairsTaskGrid");
 const affairsPriorityGrid = document.querySelector("#affairsPriorityGrid");
 const affairsServiceGrid = document.querySelector("#affairsServiceGrid");
 const affairsNoticeList = document.querySelector("#affairsNoticeList");
+const affairsNoticeMeta = document.querySelector("#affairsNoticeMeta");
+const affairsNewsRefreshBtn = document.querySelector("#affairsNewsRefreshBtn");
 const affairsRecentList = document.querySelector("#affairsRecentList");
 const affairsDataUpdatedAt = document.querySelector("#affairsDataUpdatedAt");
 const affairsDetailModal = document.querySelector("#affairsDetailModal");
@@ -245,6 +247,7 @@ let mindmapBranches = [];
 let lastMindmapArtifact = null;
 let currentAffairsProfileId = localStorage.getItem("affairs_profile") || "undergraduate";
 let affairsTasks = [];
+let affairsNewsRequestId = 0;
 
 document.querySelectorAll("[data-open-mode]").forEach((button) => {
   button.addEventListener("click", () => openAssistant(button.dataset.openMode));
@@ -284,6 +287,8 @@ affairsSettingsBtn.addEventListener("click", () => {
 affairsNotificationBtn.addEventListener("click", () => {
   document.querySelector("#affairsNoticesTitle")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+
+affairsNewsRefreshBtn.addEventListener("click", () => loadAffairsNotices(true));
 
 affairsProfileSelect.addEventListener("change", () => {
   currentAffairsProfileId = affairsProfileSelect.value;
@@ -1635,7 +1640,8 @@ function renderAffairsDashboard() {
   renderAffairsTasks();
   renderAffairsPriorities();
   renderAffairsServices();
-  renderAffairsNotices();
+  renderAffairsNotices([], { loading: true });
+  loadAffairsNotices();
   renderAffairsRecent();
 }
 
@@ -1700,26 +1706,79 @@ function renderAffairsServices() {
     .join("");
 }
 
-function renderAffairsNotices() {
-  const profile = getAffairsProfile();
-  affairsNoticeList.innerHTML = profile.notices
+function renderAffairsNotices(notices = [], options = {}) {
+  if (options.loading) {
+    affairsNoticeList.innerHTML = Array.from({ length: 4 }, () => `
+      <article class="affairs-notice-card news-loading-card">
+        <span class="notice-icon"></span><div><i></i><i></i><i></i></div>
+      </article>`).join("");
+    return;
+  }
+  if (!notices.length) {
+    affairsNoticeList.innerHTML = `
+      <div class="affairs-news-empty">
+        <strong>暂未读取到匹配通知</strong>
+        <span>${escapeHtml(options.message || "请稍后刷新，或检查本地服务的网络连接。")}</span>
+      </div>`;
+    return;
+  }
+  affairsNoticeList.innerHTML = notices
     .map((notice) => `
       <article class="affairs-notice-card">
-        <span class="notice-icon">${escapeHtml(notice.icon)}</span>
+        <span class="notice-icon">${escapeHtml(notice.icon || "📢")}</span>
         <div>
           <div class="affairs-card-title-row">
             <h4>${escapeHtml(notice.title)}</h4>
             <span class="source-badge ${sourceStatusClass(notice.sourceStatus)}">${escapeHtml(notice.sourceStatus)}</span>
           </div>
           <p>${escapeHtml(notice.summary)}</p>
-          <small>${escapeHtml(notice.timeLabel)}</small>
+          <div class="affairs-news-meta">
+            <span>${escapeHtml(notice.matchReason)}</span>
+            <span>发布于 ${escapeHtml(notice.publishedDate)}</span>
+            <b class="${notice.statusLabel === "已截止" ? "expired" : ""}">${escapeHtml(notice.statusLabel)}</b>
+          </div>
         </div>
         <div class="notice-actions">
-          ${notice.actionable ? `<button type="button" data-affairs-action="notice-task" data-task-id="${escapeHtml(notice.taskId)}">加入办理</button>` : ""}
-          <a href="${escapeHtml(notice.sourceUrl)}" target="_blank" rel="noreferrer">官方来源 ↗</a>
+          <strong>${escapeHtml(notice.sourceName)}</strong>
+          <a href="${escapeHtml(notice.sourceUrl)}" target="_blank" rel="noreferrer">查看具体通知 ↗</a>
         </div>
       </article>`)
     .join("");
+}
+
+async function loadAffairsNotices(forceRefresh = false) {
+  const profile = getAffairsProfile();
+  const requestedProfile = profile.id;
+  const requestId = ++affairsNewsRequestId;
+  affairsNewsRefreshBtn.disabled = true;
+  affairsNewsRefreshBtn.textContent = "更新中…";
+  affairsNoticeMeta.textContent = `${profile.level} · 按发布时间排序`;
+  try {
+    const params = new URLSearchParams({
+      profile: requestedProfile,
+      grade: profile.grade,
+      limit: "6",
+    });
+    if (forceRefresh) params.set("refresh", "true");
+    const response = await fetch(`/api/affairs/notices?${params}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (requestId !== affairsNewsRequestId || requestedProfile !== currentAffairsProfileId) return;
+    renderAffairsNotices(data.items || []);
+    const updateTime = new Date(data.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    affairsNoticeMeta.textContent = data.liveCount
+      ? `${profile.level} · 官网实时聚合 · ${updateTime}`
+      : `${profile.level} · 已核验回退数据 · ${updateTime}`;
+  } catch (error) {
+    if (requestId !== affairsNewsRequestId) return;
+    affairsNoticeMeta.textContent = `${profile.level} · 更新失败`;
+    renderAffairsNotices([], { message: `资讯接口暂不可用：${error.message}` });
+  } finally {
+    if (requestId === affairsNewsRequestId) {
+      affairsNewsRefreshBtn.disabled = false;
+      affairsNewsRefreshBtn.textContent = "↻ 刷新资讯";
+    }
+  }
 }
 
 function renderAffairsRecent() {
@@ -1742,7 +1801,7 @@ function affairsStatusMeta(status) {
 
 function sourceStatusClass(status) {
   if (String(status).includes("演示")) return "demo";
-  if (String(status).includes("核验")) return "official";
+  if (String(status).includes("核验") || String(status).includes("实时")) return "official";
   return "pending";
 }
 
