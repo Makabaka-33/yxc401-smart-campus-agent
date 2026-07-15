@@ -14,6 +14,7 @@ import uuid
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 from urllib.parse import urljoin, urlparse
@@ -274,6 +275,9 @@ AFFAIRS_NEWS_FALLBACK = [
 
 
 AFFAIRS_NEWS_CACHE: dict[str, tuple[float, list[dict[str, Any]], int]] = {}
+AFFAIRS_ARTICLES_PER_SOURCE = 5
+AFFAIRS_ARTICLE_MAX_CHARS = 250_000
+AFFAIRS_SERVICE_HOSTS = {"cet-bm.neea.edu.cn", "cet.neea.edu.cn", "www.neea.edu.cn"}
 
 
 SYSTEM_PROMPTS: dict[str, str] = {
@@ -450,6 +454,7 @@ async def list_affairs_notices(
         "grade": grade.strip(),
         "generatedAt": now_iso(),
         "liveCount": live_count,
+        "contentFetchedCount": sum(1 for item in ranked[:safe_limit] if item.get("contentFetched")),
         "fallbackUsed": live_count == 0,
         "items": ranked[:safe_limit],
     }
@@ -2061,6 +2066,76 @@ def summarize(text: str, limit: int = 160) -> str:
     return compact[:limit]
 
 
+class AffairsArticleParser(HTMLParser):
+    BLOCK_TAGS = {"article", "br", "dd", "div", "dl", "dt", "h1", "h2", "h3", "h4", "li", "p", "section", "table", "td", "th", "tr"}
+    SKIP_TAGS = {"footer", "header", "nav", "noscript", "script", "style", "svg"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.fragments: list[str] = []
+        self.links: list[dict[str, str]] = []
+        self.skip_depth = 0
+        self.current_link: dict[str, Any] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in self.SKIP_TAGS:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCK_TAGS:
+            self.fragments.append("\n")
+        if tag == "a":
+            href = dict(attrs).get("href") or ""
+            self.current_link = {"href": href, "text": []}
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self.SKIP_TAGS and self.skip_depth:
+            self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag == "a" and self.current_link is not None:
+            text = re.sub(r"\s+", " ", "".join(self.current_link["text"])).strip()
+            self.links.append({"href": str(self.current_link["href"]), "text": text})
+            self.current_link = None
+        if tag in self.BLOCK_TAGS:
+            self.fragments.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self.skip_depth:
+            return
+        self.fragments.append(data)
+        if self.current_link is not None:
+            self.current_link["text"].append(data)
+
+
+def affairs_source_allows_url(article_url: str, source: dict[str, Any]) -> bool:
+    parsed = urlparse(article_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    hostname = parsed.hostname.lower()
+    allowed_hosts = source.get("allowed_hosts") or ["nau.edu.cn"]
+    if not any(hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts):
+        return False
+    path_markers = source.get("article_path_markers") or ["page.htm"]
+    return any(marker in parsed.path for marker in path_markers)
+
+
+def affairs_safe_related_url(raw_url: str, article_url: str) -> str:
+    candidate = urljoin(article_url, unescape(raw_url).strip())
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ""
+    hostname = parsed.hostname.lower()
+    article_host = (urlparse(article_url).hostname or "").lower()
+    if hostname == article_host or hostname.endswith(".nau.edu.cn") or hostname in AFFAIRS_SERVICE_HOSTS or hostname.endswith(".neea.edu.cn"):
+        return candidate
+    return ""
+
+
 def clean_affairs_news_text(value: str) -> str:
     without_tags = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", unescape(without_tags)).strip()
@@ -2110,14 +2185,7 @@ def extract_affairs_news(html_text: str, source: dict[str, Any]) -> list[dict[st
         if len(title) < 8:
             continue
         article_url = urljoin(source["url"], unescape(match.group(1)).strip())
-        parsed = urlparse(article_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            continue
-        hostname = parsed.hostname.lower()
-        allowed_hosts = source.get("allowed_hosts") or ["nau.edu.cn"]
-        host_allowed = any(hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts)
-        path_markers = source.get("article_path_markers") or ["page.htm"]
-        if not host_allowed or not any(marker in parsed.path for marker in path_markers):
+        if not affairs_source_allows_url(article_url, source):
             continue
         if article_url in seen:
             continue
@@ -2145,18 +2213,196 @@ def extract_affairs_news(html_text: str, source: dict[str, Any]) -> list[dict[st
     return items
 
 
+def normalize_affairs_article_text(html_text: str, title: str) -> tuple[list[str], list[dict[str, str]]]:
+    parser = AffairsArticleParser()
+    parser.feed(html_text[:AFFAIRS_ARTICLE_MAX_CHARS])
+    lines = [re.sub(r"\s+", " ", line).strip() for line in "".join(parser.fragments).splitlines()]
+    lines = [line for line in lines if line]
+
+    exact_matches = [index for index, line in enumerate(lines) if line == title]
+    partial_matches = [index for index, line in enumerate(lines) if title in line]
+    if exact_matches:
+        lines = lines[exact_matches[-1] :]
+    elif partial_matches:
+        lines = lines[partial_matches[-1] :]
+
+    stop_markers = ("南京审计大学版权所有", "友情链接：", "主办单位：教育部教育考试院")
+    for index, line in enumerate(lines):
+        if index > 2 and any(marker in line for marker in stop_markers):
+            lines = lines[:index]
+            break
+    return lines[:180], parser.links
+
+
+def parse_affairs_date_text(value: str) -> date | None:
+    match = re.search(r"(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日", value)
+    if not match:
+        match = re.search(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})", value)
+    if not match:
+        return None
+    try:
+        return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    except ValueError:
+        return None
+
+
+def extract_affairs_sections(lines: list[str]) -> list[dict[str, str]]:
+    heading_pattern = re.compile(r"^(?:[一二三四五六七八九十]+、|\d+[.、])\s*(.{2,40})$")
+    sections: list[dict[str, str]] = []
+    current: dict[str, Any] | None = None
+    for line in lines:
+        heading = heading_pattern.match(line)
+        if heading:
+            if current and current["lines"]:
+                sections.append({"title": current["title"], "content": " ".join(current["lines"])[:700]})
+            current = {"title": heading.group(1).strip(), "lines": []}
+            if len(sections) >= 8:
+                break
+            continue
+        if current and len(" ".join(current["lines"])) < 900:
+            current["lines"].append(line)
+    if current and current["lines"] and len(sections) < 8:
+        sections.append({"title": current["title"], "content": " ".join(current["lines"])[:700]})
+    return sections
+
+
+def extract_affairs_article_details(
+    html_text: str,
+    item: dict[str, Any],
+    source: dict[str, Any],
+) -> dict[str, Any]:
+    lines, links = normalize_affairs_article_text(html_text, str(item["title"]))
+    article_text = "\n".join(lines)
+    if len(article_text) < 80:
+        return {"contentFetched": False, "contentStatus": "正文内容不足"}
+
+    dated_fragments = re.findall(
+        r"20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日(?:\s*\d{1,2}[:：]\d{2})?|20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s*\d{1,2}[:：]\d{2})?",
+        article_text,
+    )
+    relative_fragments = re.findall(
+        r"(?<!\d)(?:\d{1,2}\s*月\s*\d{1,2}\s*日)(?:\s*(?:至|—|-)\s*\d{1,2}\s*月\s*\d{1,2}\s*日)?(?:\s*\d{1,2}\s*时(?:\s*\d{1,2}\s*分)?)?",
+        article_text,
+    )
+    time_nodes = list(
+        dict.fromkeys(re.sub(r"\s+", "", value) for value in [*dated_fragments, *relative_fragments])
+    )[:10]
+
+    deadline = ""
+    deadline_text = ""
+    time_keywords = ("报名时间", "申请时间", "截止", "截至", "逾期", "开放时间", "办理时间")
+    for line in lines:
+        if not any(keyword in line for keyword in time_keywords):
+            continue
+        candidates = re.findall(
+            r"20\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日(?:\s*\d{1,2}[:：]\d{2})?|20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s*\d{1,2}[:：]\d{2})?",
+            line,
+        )
+        if candidates:
+            parsed_deadline = parse_affairs_date_text(candidates[-1])
+            if parsed_deadline:
+                deadline = parsed_deadline.isoformat()
+                deadline_text = candidates[-1]
+
+    contacts = list(dict.fromkeys(re.findall(r"(?<!\d)(?:0\d{2,3}[-－— ]?)?\d{7,8}(?!\d)", article_text)))[:6]
+    audiences: list[str] = []
+    if any(term in article_text for term in ("全体在校学生", "含研究生", "本科生和研究生")):
+        audiences = ["undergraduate", "graduate"]
+    else:
+        if any(term in article_text for term in ("本科生", "普本学生", "本科学生")):
+            audiences.append("undergraduate")
+        if "研究生" in article_text:
+            audiences.append("graduate")
+    if not audiences:
+        audiences = list(source["audiences"])
+
+    attachments: list[dict[str, str]] = []
+    service_links: list[dict[str, str]] = []
+    for link in links:
+        safe_url = affairs_safe_related_url(link["href"], str(item["sourceUrl"]))
+        if not safe_url:
+            continue
+        link_text = link["text"] or Path(urlparse(safe_url).path).name
+        path = urlparse(safe_url).path.lower()
+        if "附件" in link_text or re.search(r"\.(?:pdf|docx?|xlsx?|pptx?|zip|rar)$", path):
+            if safe_url != item["sourceUrl"] and all(entry["url"] != safe_url for entry in attachments):
+                attachments.append({"title": link_text[:100] or "附件", "url": safe_url})
+            continue
+        hostname = (urlparse(safe_url).hostname or "").lower()
+        if hostname == "cet-bm.neea.edu.cn" or any(word in link_text for word in ("报名", "系统", "平台", "查询", "办理", "入口")):
+            if safe_url != item["sourceUrl"] and all(entry["url"] != safe_url for entry in service_links):
+                service_links.append({"title": link_text[:100] or hostname, "url": safe_url})
+
+    action_items = [
+        line[:220]
+        for line in lines
+        if len(line) >= 12 and any(word in line for word in ("必须", "务必", "需要", "请于", "请在", "应当"))
+    ][:6]
+    summary_candidates = [
+        line for line in lines[1:]
+        if len(line) >= 24 and not any(marker in line for marker in ("发布者：", "发布时间：", "浏览次数："))
+    ]
+    content_summary = " ".join(summary_candidates[:2])[:320] or affairs_news_summary(str(item["title"]), source["name"])
+
+    return {
+        "contentFetched": True,
+        "contentStatus": "官方正文已解析",
+        "summary": content_summary,
+        "contentExcerpt": "\n".join(lines[:36])[:1800],
+        "deadline": deadline,
+        "deadlineText": deadline_text,
+        "timeNodes": time_nodes,
+        "audiences": audiences,
+        "contacts": contacts,
+        "serviceLinks": service_links[:6],
+        "attachments": attachments[:6],
+        "actionItems": action_items,
+        "sections": extract_affairs_sections(lines),
+    }
+
+
 async def fetch_affairs_live_news(profile: str) -> list[dict[str, Any]]:
     sources = [source for source in AFFAIRS_NEWS_SOURCES if profile in source["audiences"]]
+    article_semaphore = asyncio.Semaphore(8)
+
+    async def fetch_article(
+        client: httpx.AsyncClient,
+        item: dict[str, Any],
+        source: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            async with article_semaphore:
+                response = await client.get(item["sourceUrl"])
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").lower()
+            if "html" not in content_type or len(response.content) > AFFAIRS_ARTICLE_MAX_CHARS * 4:
+                return item
+            details = extract_affairs_article_details(response.text, item, source)
+            return {**item, **details}
+        except Exception:
+            return item
 
     async def fetch_source(client: httpx.AsyncClient, source: dict[str, Any]) -> list[dict[str, Any]]:
+        discovered: list[dict[str, Any]] = []
         try:
             response = await client.get(source["url"])
             response.raise_for_status()
-            return extract_affairs_news(response.text, source)
+            discovered = extract_affairs_news(response.text, source)
         except Exception:
-            return []
+            pass
+        verified_seeds = [
+            {**item, "live": True}
+            for item in AFFAIRS_NEWS_FALLBACK
+            if item.get("sourceName") == source["name"] and affairs_source_allows_url(str(item["sourceUrl"]), source)
+        ]
+        candidates_by_url = {item["sourceUrl"]: item for item in verified_seeds}
+        candidates_by_url.update({item["sourceUrl"]: item for item in discovered})
+        candidates = list(candidates_by_url.values())
+        candidates.sort(key=lambda item: item["publishedDate"], reverse=True)
+        selected = candidates[:AFFAIRS_ARTICLES_PER_SOURCE]
+        return await asyncio.gather(*(fetch_article(client, item, source) for item in selected))
 
-    timeout = httpx.Timeout(4.5, connect=3.0)
+    timeout = httpx.Timeout(7.0, connect=3.5)
     async with httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=True,
@@ -2288,7 +2534,7 @@ def rank_affairs_news(profile: str, grade: str, live_items: list[dict[str, Any]]
                 "matchReason": f"匹配{level_label} · {item['sourceName']}",
                 "freshness": freshness,
                 "statusLabel": status_label,
-                "sourceStatus": "官网实时" if item.get("live") else "官方已核验",
+                "sourceStatus": "官方正文已解析" if item.get("contentFetched") else "官网实时" if item.get("live") else "官方已核验",
                 "score": round(score, 2),
             }
         )

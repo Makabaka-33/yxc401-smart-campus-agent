@@ -57,6 +57,8 @@ def test_affairs_notices_use_identity_time_and_article_links(monkeypatch):
     assert graduate.status_code == 200
     undergraduate_items = undergraduate.json()["items"]
     graduate_items = graduate.json()["items"]
+    assert undergraduate.json()["contentFetchedCount"] == 0
+    assert graduate.json()["contentFetchedCount"] == 0
     assert undergraduate_items[0]["publishedDate"] >= undergraduate_items[-1]["publishedDate"]
     assert graduate_items[0]["publishedDate"] >= graduate_items[-1]["publishedDate"]
     allowed_hosts = {"jw.nau.edu.cn", "gs.nau.edu.cn", "xgc.nau.edu.cn", "lib.nau.edu.cn", "cet.neea.edu.cn"}
@@ -97,6 +99,37 @@ def test_cet_official_source_can_be_extracted_without_relaxing_host_allowlist():
     assert len(items) == 1
     assert items[0]["sourceUrl"] == "https://cet.neea.edu.cn/html1/report/2603/2-1.htm"
     assert items[0]["publishedDate"] == "2026-03-06"
+
+
+def test_affairs_article_body_is_structured_with_deadline_contacts_and_links():
+    item = {
+        "title": "关于2026年上半年全国大学英语四、六级考试报名的通知",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0318/c8013a155043/page.htm",
+    }
+    source = next(entry for entry in main_module.AFFAIRS_NEWS_SOURCES if entry["name"] == "教务处")
+    html = """
+    <html><body><nav>无关导航</nav><article>
+      <h1>关于2026年上半年全国大学英语四、六级考试报名的通知</h1>
+      <p>发布者：教务处 发布时间：2026-03-18</p>
+      <p>本次考试面向全体在校学生（含研究生），请在报名网站完成信息核对。</p>
+      <h2>四、正式报名</h2>
+      <p>报名时间：2026年3月23日12:00—2026年3月30日17:00，逾期无法补报。</p>
+      <p>学生必须在24小时内缴费，如有疑问请联系025-58318571。</p>
+      <a href="https://cet-bm.neea.edu.cn/">全国四六级报名系统</a>
+      <a href="/_upload/article/files/cet-flow.pdf">附件一：CET报名流程.pdf</a>
+    </article><footer>南京审计大学版权所有</footer></body></html>
+    """
+
+    details = main_module.extract_affairs_article_details(html, item, source)
+
+    assert details["contentFetched"] is True
+    assert details["deadline"] == "2026-03-30"
+    assert details["deadlineText"] == "2026年3月30日17:00"
+    assert details["audiences"] == ["undergraduate", "graduate"]
+    assert "025-58318571" in details["contacts"]
+    assert details["serviceLinks"][0]["url"] == "https://cet-bm.neea.edu.cn/"
+    assert details["attachments"][0]["url"].endswith("cet-flow.pdf")
+    assert any(section["title"] == "正式报名" for section in details["sections"])
 
 
 def test_chat_creates_session_and_logs_call():
