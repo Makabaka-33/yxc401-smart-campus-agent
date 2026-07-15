@@ -125,6 +125,14 @@ AUTH_PORTAL = {
 
 AFFAIRS_NEWS_SOURCES = [
     {
+        "name": "中国教育考试网·CET",
+        "url": "https://cet.neea.edu.cn/",
+        "icon": "CET",
+        "audiences": ["undergraduate", "graduate"],
+        "allowed_hosts": ["cet.neea.edu.cn"],
+        "article_path_markers": ["/html1/report/"],
+    },
+    {
         "name": "教务处",
         "url": "https://jw.nau.edu.cn/",
         "icon": "📘",
@@ -152,6 +160,17 @@ AFFAIRS_NEWS_SOURCES = [
 
 
 AFFAIRS_NEWS_FALLBACK = [
+    {
+        "id": "neea-cet-20260306",
+        "title": "2026年上半年全国大学英语四、六级考试报名工作启动",
+        "summary": "中国教育考试网公布上半年笔试、口试和准考证打印安排；各考点具体报名时间仍以所在学校通知为准。",
+        "publishedDate": "2026-03-06",
+        "deadline": "",
+        "sourceName": "中国教育考试网·CET",
+        "sourceUrl": "https://cet.neea.edu.cn/html1/report/2603/2-1.htm",
+        "icon": "CET",
+        "audiences": ["undergraduate", "graduate"],
+    },
     {
         "id": "jw-textbook-20260710",
         "title": "关于2026—2027学年第一学期普本学生教材选购工作的通知",
@@ -2094,7 +2113,11 @@ def extract_affairs_news(html_text: str, source: dict[str, Any]) -> list[dict[st
         parsed = urlparse(article_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             continue
-        if not parsed.hostname.endswith(".nau.edu.cn") or "page.htm" not in parsed.path:
+        hostname = parsed.hostname.lower()
+        allowed_hosts = source.get("allowed_hosts") or ["nau.edu.cn"]
+        host_allowed = any(hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts)
+        path_markers = source.get("article_path_markers") or ["page.htm"]
+        if not host_allowed or not any(marker in parsed.path for marker in path_markers):
             continue
         if article_url in seen:
             continue
@@ -2143,7 +2166,34 @@ async def fetch_affairs_live_news(profile: str) -> list[dict[str, Any]]:
     return [item for group in groups for item in group]
 
 
+def affairs_news_timeline_is_valid(item: dict[str, Any], today: date) -> bool:
+    """Reject notices whose publication, URL year, or deadline contradicts the timeline."""
+    try:
+        published = date.fromisoformat(str(item["publishedDate"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+    if published > today:
+        return False
+
+    url_date = affairs_news_date(str(item.get("sourceUrl", "")))
+    if url_date and url_date != published:
+        return False
+
+    deadline_text = str(item.get("deadline", "")).strip()
+    if deadline_text:
+        try:
+            deadline = date.fromisoformat(deadline_text)
+        except ValueError:
+            return False
+        if deadline < published:
+            return False
+    return True
+
+
 def affairs_news_score(item: dict[str, Any], profile: str, grade: str, today: date) -> float:
+    if not affairs_news_timeline_is_valid(item, today):
+        return -1000
+
     title = str(item.get("title", ""))
     source = str(item.get("sourceName", ""))
     audiences = item.get("audiences") or []
@@ -2155,8 +2205,8 @@ def affairs_news_score(item: dict[str, Any], profile: str, grade: str, today: da
         return -1000
 
     source_scores = {
-        "undergraduate": {"教务处": 48, "学生工作处": 38, "图书馆": 30, "研究生院": -100},
-        "graduate": {"研究生院": 52, "教务处": 30, "图书馆": 28, "学生工作处": 26},
+        "undergraduate": {"教务处": 48, "中国教育考试网·CET": 46, "学生工作处": 38, "图书馆": 30, "研究生院": -100},
+        "graduate": {"研究生院": 52, "中国教育考试网·CET": 46, "教务处": 30, "图书馆": 28, "学生工作处": 26},
     }
     score = float(source_scores.get(profile, {}).get(source, 10))
     relevant_words = (

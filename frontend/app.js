@@ -1653,9 +1653,7 @@ function renderAffairsTasks() {
       const total = task.materials.length || 1;
       const progress = task.status === "completed" ? 100 : Math.round((done / total) * 100);
       const status = affairsStatusMeta(task.status);
-      const deadline = task.deadline
-        ? `<span>截止：${escapeHtml(task.deadline)}${task.deadlineIsDemo ? " · 演示" : ""}</span>`
-        : "<span>无统一截止时间</span>";
+      const deadline = `<span>${escapeHtml(formatAffairsTime(task, "无统一截止时间"))}</span>`;
       return `
         <article class="affairs-task-card">
           <div class="affairs-card-title-row">
@@ -1686,7 +1684,7 @@ function renderAffairsPriorities() {
         <p>${escapeHtml(item.description)}</p>
         <strong class="priority-deadline">${formatAffairsDeadline(item)}</strong>
         <div class="priority-actions">
-          <button type="button" data-affairs-action="priority-source" data-priority-id="${escapeHtml(item.id)}">查看详情</button>
+          <button type="button" data-affairs-action="priority-source" data-priority-id="${escapeHtml(item.id)}">${item.timeBasis ? "查看依据" : "查看详情"}</button>
           <button class="priority-add ${saved.has(item.id) ? "added" : ""}" type="button" data-affairs-action="priority-add" data-priority-id="${escapeHtml(item.id)}">${saved.has(item.id) ? "已加入" : "+ 待办"}</button>
         </div>
       </article>`)
@@ -1805,12 +1803,19 @@ function sourceStatusClass(status) {
   return "pending";
 }
 
+function formatAffairsTime(item, emptyLabel = "可随时查看") {
+  if (item.deadline) {
+    const deadline = new Date(`${item.deadline}T23:59:59`);
+    const days = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
+    const countdown = days >= 0 ? `还有 ${days} 天` : `已过 ${Math.abs(days)} 天`;
+    return `${item.deadline} · ${countdown}`;
+  }
+  if (item.expectedWindow) return `${item.expectedWindow} · 待官方通知`;
+  return emptyLabel;
+}
+
 function formatAffairsDeadline(item) {
-  if (!item.deadline) return "可随时查看";
-  const deadline = new Date(`${item.deadline}T23:59:59`);
-  const days = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
-  const countdown = days >= 0 ? `还有 ${days} 天` : `已过 ${Math.abs(days)} 天`;
-  return `${item.deadline} · ${countdown}${item.deadlineIsDemo ? "（演示）" : ""}`;
+  return formatAffairsTime(item);
 }
 
 function handleAffairsDashboardClick(event) {
@@ -1857,7 +1862,8 @@ function openAffairsTaskDetail(taskId) {
     <dl class="affairs-detail-list">
       <div><dt>当前进度</dt><dd>${done}/${task.materials.length} 项已完成</dd></div>
       <div><dt>下一步</dt><dd>${escapeHtml(task.nextStep)}</dd></div>
-      <div><dt>截止时间</dt><dd>${task.deadline ? `${escapeHtml(task.deadline)}${task.deadlineIsDemo ? "（演示模拟）" : ""}` : "以官方通知或办理窗口为准"}</dd></div>
+      <div><dt>时间状态</dt><dd>${escapeHtml(formatAffairsTime(task, "以官方通知或办理窗口为准"))}</dd></div>
+      ${task.timeBasis ? `<div><dt>时间依据</dt><dd>${escapeHtml(task.timeBasis)}</dd></div>` : ""}
     </dl>
     <h3 class="affairs-material-title">材料与步骤</h3>
     <div class="affairs-material-list">
@@ -1867,8 +1873,18 @@ function openAffairsTaskDetail(taskId) {
           <span>${escapeHtml(material.name)}</span>
         </label>`).join("")}
     </div>
-    <a class="affairs-source-link" href="${escapeHtml(task.sourceUrl)}" target="_blank" rel="noreferrer">查看${escapeHtml(task.sourceTitle)} ↗</a>`;
+    ${renderAffairsSourceLinks(task)}`;
   affairsDetailModal.hidden = false;
+}
+
+function renderAffairsSourceLinks(record) {
+  const sources = Array.isArray(record.sourceUrls) && record.sourceUrls.length
+    ? record.sourceUrls
+    : [{ title: record.sourceTitle || "官方来源", url: record.sourceUrl }];
+  return sources
+    .filter((source) => source?.url)
+    .map((source) => `<a class="affairs-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">查看${escapeHtml(source.title || "官方来源")} ↗</a>`)
+    .join("");
 }
 
 function closeAffairsDetail() {
@@ -1909,8 +1925,15 @@ function findLocalAffairsAnswer(question) {
   const materialText = record.materials?.length
     ? `\n\n**材料与步骤**\n${record.materials.map((item) => `- ${item.checked ? "已完成" : "待完成"}：${item.name}`).join("\n")}`
     : "";
-  const deadline = record.deadline ? `\n\n**时间**：${record.deadline}${record.deadlineIsDemo ? "（演示模拟，请以新通知为准）" : ""}` : "";
-  return `### ${record.title}\n\n**身份匹配**：${profile.level} · ${record.kind}\n\n**办理提示**：${detail}${materialText}${deadline}\n\n**信息状态**：${record.sourceStatus}\n\n[查看官方来源](${record.sourceUrl})`;
+  const timeText = record.deadline || record.expectedWindow
+    ? `\n\n**时间**：${formatAffairsTime(record, "待官方通知")}`
+    : "";
+  const timeBasis = record.timeBasis ? `\n\n**时间依据**：${record.timeBasis}` : "";
+  const sources = Array.isArray(record.sourceUrls) && record.sourceUrls.length
+    ? record.sourceUrls
+    : [{ title: record.sourceTitle || "官方来源", url: record.sourceUrl }];
+  const sourceLinks = sources.filter((source) => source?.url).map((source) => `[${source.title || "官方来源"}](${source.url})`).join(" · ");
+  return `### ${record.title}\n\n**身份匹配**：${profile.level} · ${record.kind}\n\n**办理提示**：${detail}${materialText}${timeText}${timeBasis}\n\n**信息状态**：${record.sourceStatus}\n\n${sourceLinks}`;
 }
 
 async function answerAffairsQuestion(rawQuestion) {

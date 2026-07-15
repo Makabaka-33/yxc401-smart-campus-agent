@@ -1,4 +1,6 @@
+from datetime import date
 from io import BytesIO
+from urllib.parse import urlparse
 
 from backend import main as main_module
 from backend.main import app
@@ -25,8 +27,14 @@ def test_student_affairs_dashboard_assets_are_served():
     assert "undergraduate" in data.text
     assert "graduate" in data.text
     assert "官方已核验" in data.text
+    assert "往年规律预估" in data.text
+    assert "待官方通知" in data.text
+    assert "https://cet.neea.edu.cn/" in data.text
+    assert 'deadline: "2026-09-18"' not in data.text
+    assert 'deadline: "2026-11-15"' not in data.text
     assert app_script.status_code == 200
     assert 'openAssistant("affairs")' in app_script.text
+    assert "expectedWindow" in app_script.text
 
 
 def test_affairs_notices_use_identity_time_and_article_links(monkeypatch):
@@ -51,9 +59,44 @@ def test_affairs_notices_use_identity_time_and_article_links(monkeypatch):
     graduate_items = graduate.json()["items"]
     assert undergraduate_items[0]["publishedDate"] >= undergraduate_items[-1]["publishedDate"]
     assert graduate_items[0]["publishedDate"] >= graduate_items[-1]["publishedDate"]
-    assert all("page.htm" in item["sourceUrl"] for item in undergraduate_items + graduate_items)
+    allowed_hosts = {"jw.nau.edu.cn", "gs.nau.edu.cn", "xgc.nau.edu.cn", "lib.nau.edu.cn", "cet.neea.edu.cn"}
+    assert all(urlparse(item["sourceUrl"]).hostname in allowed_hosts for item in undergraduate_items + graduate_items)
+    assert all(urlparse(item["sourceUrl"]).path not in {"", "/"} for item in undergraduate_items + graduate_items)
     assert all("研究生" not in item["matchReason"] for item in undergraduate_items)
     assert all("研究生" in item["matchReason"] for item in graduate_items)
+
+
+def test_affairs_notice_timeline_validation():
+    today = date(2026, 7, 15)
+    valid = {
+        "publishedDate": "2026-03-18",
+        "deadline": "2026-03-30",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0318/c8013a155043/page.htm",
+    }
+    wrong_url_year = {**valid, "sourceUrl": "https://jw.nau.edu.cn/2025/0318/c8013a155043/page.htm"}
+    deadline_before_publication = {**valid, "deadline": "2026-03-10"}
+    future_notice = {**valid, "publishedDate": "2026-07-16", "sourceUrl": "https://cet.neea.edu.cn/html1/report/2607/1-1.htm"}
+
+    assert main_module.affairs_news_timeline_is_valid(valid, today) is True
+    assert main_module.affairs_news_timeline_is_valid(wrong_url_year, today) is False
+    assert main_module.affairs_news_timeline_is_valid(deadline_before_publication, today) is False
+    assert main_module.affairs_news_timeline_is_valid(future_notice, today) is False
+
+
+def test_cet_official_source_can_be_extracted_without_relaxing_host_allowlist():
+    source = next(item for item in main_module.AFFAIRS_NEWS_SOURCES if item["name"] == "中国教育考试网·CET")
+    html = """
+    <li><span>2026-03-06</span>
+      <a href="/html1/report/2603/2-1.htm">2026年上半年全国大学英语四、六级考试报名工作启动</a>
+      <a href="https://example.com/html1/report/fake.htm">伪造的四六级报名通知不应进入结果</a>
+    </li>
+    """
+
+    items = main_module.extract_affairs_news(html, source)
+
+    assert len(items) == 1
+    assert items[0]["sourceUrl"] == "https://cet.neea.edu.cn/html1/report/2603/2-1.htm"
+    assert items[0]["publishedDate"] == "2026-03-06"
 
 
 def test_chat_creates_session_and_logs_call():
