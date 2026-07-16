@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智启校园教学管智能体</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-safety-3" />
   </head>
   <body>
     <main class="app-shell">
@@ -41,7 +41,7 @@
             </button>
             <button class="assistant-card" type="button" data-open-mode="affairs">
               <span class="card-icon">管</span>
-              <strong>学生生活助手</strong>
+              <strong>事务助手</strong>
               <small>校园事务、奖学金、选课、办事流程和信息门户</small>
             </button>
           </div>
@@ -49,6 +49,30 @@
       </section>
 
       <section id="assistantPage" class="assistant-page" hidden>
+        <aside id="affairsSidebar" class="affairs-sidebar" hidden>
+          <div class="affairs-side-brand">
+            <span>智</span>
+            <strong>智启校园</strong>
+          </div>
+          <nav class="affairs-side-nav" aria-label="智能体导航">
+            <button type="button" data-affairs-nav="home">
+              <span>⌂</span><b>首页工作台</b>
+            </button>
+            <button type="button" data-affairs-nav="learning">
+              <span>▣</span><b>学习助手</b>
+            </button>
+            <button type="button" data-affairs-nav="teaching">
+              <span>✎</span><b>教学助手</b>
+            </button>
+            <button class="active" type="button" data-affairs-nav="affairs" aria-current="page">
+              <span>⌂</span><b>事务助手</b>
+            </button>
+          </nav>
+          <button id="affairsSettingsBtn" class="affairs-side-settings" type="button">
+            <span>⚙</span><b>设置与帮助</b>
+          </button>
+        </aside>
+
         <header class="assistant-topbar">
           <div class="top-left">
             <button id="backHomeBtn" class="icon-btn" type="button" aria-label="返回首页">‹</button>
@@ -58,6 +82,20 @@
             </div>
           </div>
           <div class="top-right">
+            <button id="affairsNotificationBtn" class="affairs-notification-btn" type="button" aria-label="查看校园通知" hidden>
+              ♢<span>3</span>
+            </button>
+            <label id="affairsProfileSwitch" class="affairs-profile-switch" hidden>
+              <span id="affairsProfileAvatar" class="affairs-profile-avatar">张</span>
+              <span class="affairs-profile-copy">
+                <strong id="affairsProfileName">张同学</strong>
+                <small id="affairsProfileMeta">本科生 · 学生</small>
+              </span>
+              <select id="affairsProfileSelect" aria-label="切换学生演示档案">
+                <option value="undergraduate">张同学 · 本科生</option>
+                <option value="graduate">江同学 · 研究生</option>
+              </select>
+            </label>
             <span id="statusBadge" class="api-service">API 服务</span>
             <button id="loginBtn" class="portal-btn" type="button">登录信息门户</button>
           </div>
@@ -256,6 +294,84 @@
           </section>
         </section>
 
+        <section id="affairsDashboard" class="affairs-dashboard" hidden>
+          <section class="affairs-hero" aria-labelledby="affairsGreetingTitle">
+            <p class="affairs-eyebrow">南京审计大学 · 学生事务助手</p>
+            <div class="affairs-greeting-row">
+              <div>
+                <h2 id="affairsGreetingTitle">你好，张同学 <span aria-hidden="true">👋</span></h2>
+                <p id="affairsGreetingText">今天有什么校园事务需要处理，尽管告诉我吧！</p>
+              </div>
+              <div id="affairsProfileFacts" class="affairs-profile-facts"></div>
+            </div>
+
+            <form id="affairsSearchForm" class="affairs-search">
+              <label class="sr-only" for="affairsSearchInput">输入事务名称或问题</label>
+              <input id="affairsSearchInput" type="search" placeholder="输入事务名称或直接描述问题，例如：我要打印成绩单" autocomplete="off" />
+              <button type="submit" aria-label="发送事务问题">➤</button>
+            </form>
+            <div id="affairsQuickQuestions" class="affairs-quick-questions" aria-label="常用问题"></div>
+
+            <div id="affairsAgentResult" class="affairs-agent-result" hidden aria-live="polite">
+              <div class="affairs-agent-result-head">
+                <span class="affairs-agent-mark">AI</span>
+                <strong>事务助手答复</strong>
+                <button id="affairsAgentResultClose" type="button" aria-label="收起答复">×</button>
+              </div>
+              <div id="affairsAgentResultBody" class="markdown-body"></div>
+            </div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsTasksTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol green">▣</span><h3 id="affairsTasksTitle">我的事务</h3></div>
+              <span id="affairsTaskCount" class="module-link"></span>
+            </div>
+            <div id="affairsTaskGrid" class="affairs-task-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsPrioritiesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol red">◆</span><h3 id="affairsPrioritiesTitle">近期重点</h3></div>
+              <span class="module-link">身份匹配推荐</span>
+            </div>
+            <div id="affairsPriorityGrid" class="affairs-priority-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsServicesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol blue">▦</span><h3 id="affairsServicesTitle">校园服务</h3></div>
+              <span class="module-link">官方入口优先</span>
+            </div>
+            <div id="affairsServiceGrid" class="affairs-service-grid"></div>
+          </section>
+
+          <section class="affairs-module" aria-labelledby="affairsNoticesTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol purple">●</span><h3 id="affairsNoticesTitle">校园消息速览</h3></div>
+              <div class="affairs-news-tools">
+                <span id="affairsNoticeMeta" class="module-link">正在按身份与时间更新</span>
+                <button id="affairsNewsRefreshBtn" type="button">↻ 刷新资讯</button>
+              </div>
+            </div>
+            <div id="affairsNoticeList" class="affairs-notice-list"></div>
+          </section>
+
+          <section class="affairs-module affairs-recent-module" aria-labelledby="affairsRecentTitle">
+            <div class="affairs-module-heading">
+              <div><span class="module-symbol gray">↻</span><h3 id="affairsRecentTitle">最近对话</h3></div>
+            </div>
+            <div id="affairsRecentList" class="affairs-recent-list"></div>
+          </section>
+
+          <footer class="affairs-data-note">
+            <span><i class="source-dot official"></i>官方已核验</span>
+            <span><i class="source-dot demo"></i>演示模拟</span>
+            <span><i class="source-dot pending"></i>待学校确认</span>
+            <small id="affairsDataUpdatedAt"></small>
+          </footer>
+        </section>
+
         <section id="knowledgeWorkspace" class="knowledge-workspace" hidden>
           <div class="knowledge-heading">
             <div>
@@ -318,6 +434,13 @@
       </section>
     </main>
 
+    <div id="affairsDetailModal" class="modal" hidden>
+      <div class="modal-card affairs-detail-card" role="dialog" aria-modal="true" aria-labelledby="affairsDetailTitle">
+        <button id="affairsDetailCloseBtn" class="modal-close" type="button" aria-label="关闭事务详情">×</button>
+        <div id="affairsDetailBody"></div>
+      </div>
+    </div>
+
     <div id="loginModal" class="modal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
         <button id="loginCloseBtn" class="modal-close" type="button" aria-label="关闭登录">×</button>
@@ -375,6 +498,65 @@
       </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <button id="safetyGuardianBtn" class="safety-guardian-btn" type="button" aria-label="打开校园安全与关怀助手，可拖动调整位置" hidden>
+      <span class="guardian-face" aria-hidden="true">
+        <i></i>
+        <b></b>
+      </span>
+      <span class="guardian-copy">
+        <strong>守望安全</strong>
+        <em>可拖动 · SOS</em>
+      </span>
+    </button>
+
+    <div id="safetyGuardianPanel" class="safety-guardian-panel" hidden>
+      <div class="safety-guardian-card" role="dialog" aria-modal="false" aria-labelledby="safetyGuardianTitle">
+        <header>
+          <div>
+            <p class="affairs-eyebrow">Campus Safety</p>
+            <h2 id="safetyGuardianTitle">校园安全与关怀</h2>
+            <span id="safetyGuardianProfile">按当前学生身份生成建议</span>
+          </div>
+          <button id="safetyGuardianCloseBtn" type="button" aria-label="关闭校园安全助手">×</button>
+        </header>
+        <div class="safety-guardian-alert">
+          <strong>现实紧急危险请立即拨打 110 / 119 / 120</strong>
+          <span>本模块用于比赛演示，不会自动报警或替你提交正式工单。</span>
+        </div>
+        <div class="safety-guardian-actions">
+          <button type="button" data-safety-action="sos">
+            <b>SOS 快速求助</b>
+            <span>生成演示求助记录</span>
+          </button>
+          <button type="button" data-safety-action="report">
+            <b>隐患上报</b>
+            <span>路灯、漏水、门禁、消防等</span>
+          </button>
+          <button type="button" data-safety-action="care">
+            <b>心理安抚</b>
+            <span>先缓一缓，再找可信的人</span>
+          </button>
+          <a href="/static/safety.html" target="_blank" rel="noreferrer">
+            <b>进入安全中心</b>
+            <span>打开队友完整安全模块</span>
+          </a>
+        </div>
+        <form id="safetyGuardianForm" class="safety-guardian-form">
+          <label>
+            当前位置或地点
+            <input id="safetyLocationInput" type="text" placeholder="例如：沁园宿舍 3 栋门口" />
+          </label>
+          <label>
+            情况描述
+            <textarea id="safetyDescriptionInput" rows="3" placeholder="简单描述发生了什么、是否仍在发生、是否有人受伤"></textarea>
+          </label>
+          <button type="submit">生成安全事务记录</button>
+        </form>
+        <div id="safetyGuardianResult" class="safety-guardian-result" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <script src="/static/affairs-data.js?v=20260716-safety-3"></script>
+    <script src="/static/app.js?v=20260716-safety-3"></script>
   </body>
 </html>

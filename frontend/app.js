@@ -18,13 +18,13 @@ const assistantModes = {
     greeting: "你好，我是教学助手",
   },
   affairs: {
-    title: "学生生活助手",
-    subtitle: "校园事务、办事流程与信息门户",
-    logo: "管",
+    title: "事务助手",
+    subtitle: "身份适配 · 校园事务一站式办理",
+    logo: "办",
     apiMode: "affairs",
-    placeholder: "向学生生活助手提问，例如：奖学金申请流程是什么",
+    placeholder: "向事务助手提问，例如：奖学金申请流程是什么",
     defaultPrompt: "学生校园事务办理流程",
-    greeting: "你好，我是学生生活助手",
+    greeting: "你好，我是事务助手",
   },
 };
 
@@ -199,6 +199,44 @@ const commonPhraseCloseBtn = document.querySelector("#commonPhraseCloseBtn");
 const commonPhraseSearch = document.querySelector("#commonPhraseSearch");
 const commonPhraseContent = document.querySelector("#commonPhraseContent");
 const addCommonPhraseBtn = document.querySelector("#addCommonPhraseBtn");
+const affairsDashboard = document.querySelector("#affairsDashboard");
+const affairsProfileSwitch = document.querySelector("#affairsProfileSwitch");
+const affairsProfileSelect = document.querySelector("#affairsProfileSelect");
+const affairsProfileAvatar = document.querySelector("#affairsProfileAvatar");
+const affairsProfileName = document.querySelector("#affairsProfileName");
+const affairsProfileMeta = document.querySelector("#affairsProfileMeta");
+const affairsGreetingTitle = document.querySelector("#affairsGreetingTitle");
+const affairsGreetingText = document.querySelector("#affairsGreetingText");
+const affairsProfileFacts = document.querySelector("#affairsProfileFacts");
+const affairsSearchForm = document.querySelector("#affairsSearchForm");
+const affairsSearchInput = document.querySelector("#affairsSearchInput");
+const affairsQuickQuestions = document.querySelector("#affairsQuickQuestions");
+const affairsAgentResult = document.querySelector("#affairsAgentResult");
+const affairsAgentResultBody = document.querySelector("#affairsAgentResultBody");
+const affairsAgentResultClose = document.querySelector("#affairsAgentResultClose");
+const affairsTaskCount = document.querySelector("#affairsTaskCount");
+const affairsTaskGrid = document.querySelector("#affairsTaskGrid");
+const affairsPriorityGrid = document.querySelector("#affairsPriorityGrid");
+const affairsServiceGrid = document.querySelector("#affairsServiceGrid");
+const affairsNoticeList = document.querySelector("#affairsNoticeList");
+const affairsNoticeMeta = document.querySelector("#affairsNoticeMeta");
+const affairsNewsRefreshBtn = document.querySelector("#affairsNewsRefreshBtn");
+const affairsRecentList = document.querySelector("#affairsRecentList");
+const affairsDataUpdatedAt = document.querySelector("#affairsDataUpdatedAt");
+const affairsDetailModal = document.querySelector("#affairsDetailModal");
+const affairsDetailCloseBtn = document.querySelector("#affairsDetailCloseBtn");
+const affairsDetailBody = document.querySelector("#affairsDetailBody");
+const affairsSidebar = document.querySelector("#affairsSidebar");
+const affairsSettingsBtn = document.querySelector("#affairsSettingsBtn");
+const affairsNotificationBtn = document.querySelector("#affairsNotificationBtn");
+const safetyGuardianBtn = document.querySelector("#safetyGuardianBtn");
+const safetyGuardianPanel = document.querySelector("#safetyGuardianPanel");
+const safetyGuardianCloseBtn = document.querySelector("#safetyGuardianCloseBtn");
+const safetyGuardianProfile = document.querySelector("#safetyGuardianProfile");
+const safetyGuardianForm = document.querySelector("#safetyGuardianForm");
+const safetyLocationInput = document.querySelector("#safetyLocationInput");
+const safetyDescriptionInput = document.querySelector("#safetyDescriptionInput");
+const safetyGuardianResult = document.querySelector("#safetyGuardianResult");
 
 let currentMode = "learning";
 let currentSessionId = null;
@@ -215,6 +253,11 @@ let lastDocumentTranslation = null;
 let lastDocumentArchivePayload = null;
 let mindmapBranches = [];
 let lastMindmapArtifact = null;
+let currentAffairsProfileId = localStorage.getItem("affairs_profile") || "undergraduate";
+let affairsTasks = [];
+let affairsNewsRequestId = 0;
+let safetyGuardianMode = "sos";
+let safetyGuardianDrag = null;
 
 document.querySelectorAll("[data-open-mode]").forEach((button) => {
   button.addEventListener("click", () => openAssistant(button.dataset.openMode));
@@ -224,12 +267,87 @@ document.querySelectorAll("[data-feature]").forEach((button) => {
   button.addEventListener("click", () => runFeature(button.dataset.feature));
 });
 
-backHomeBtn.addEventListener("click", () => {
+function showHomePage() {
   assistantPage.hidden = true;
   homePage.hidden = false;
+  assistantPage.classList.remove("affairs-mode");
   knowledgeWorkspace.hidden = true;
   chatStage.hidden = false;
+  affairsDashboard.hidden = true;
+  affairsProfileSwitch.hidden = true;
+  affairsSidebar.hidden = true;
+  affairsNotificationBtn.hidden = true;
+  if (safetyGuardianBtn) safetyGuardianBtn.hidden = true;
+  toggleSafetyGuardian(false);
+}
+
+backHomeBtn.addEventListener("click", showHomePage);
+
+affairsSidebar.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-affairs-nav]");
+  if (!button) return;
+  const target = button.dataset.affairsNav;
+  if (target === "home") showHomePage();
+  else openAssistant(target);
 });
+
+affairsSettingsBtn.addEventListener("click", () => {
+  loginModal.hidden = false;
+  loginUserInput.focus();
+});
+
+affairsNotificationBtn.addEventListener("click", () => {
+  document.querySelector("#affairsNoticesTitle")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+affairsNewsRefreshBtn.addEventListener("click", () => loadAffairsNotices(true));
+
+affairsProfileSelect.addEventListener("change", () => {
+  currentAffairsProfileId = affairsProfileSelect.value;
+  localStorage.setItem("affairs_profile", currentAffairsProfileId);
+  affairsAgentResult.hidden = true;
+  renderAffairsDashboard();
+});
+
+affairsSearchForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await answerAffairsQuestion(affairsSearchInput.value);
+});
+
+affairsDashboard.addEventListener("click", handleAffairsDashboardClick);
+affairsAgentResultClose.addEventListener("click", () => {
+  affairsAgentResult.hidden = true;
+});
+affairsDetailCloseBtn.addEventListener("click", closeAffairsDetail);
+affairsDetailModal.addEventListener("click", (event) => {
+  if (event.target === affairsDetailModal) closeAffairsDetail();
+});
+affairsDetailModal.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-affairs-material]");
+  if (!checkbox) return;
+  const task = affairsTasks.find((item) => item.id === checkbox.dataset.taskId);
+  const material = task?.materials[Number(checkbox.dataset.affairsMaterial)];
+  if (!task || !material) return;
+  material.checked = checkbox.checked;
+  saveAffairsTaskState();
+  renderAffairsTasks();
+  openAffairsTaskDetail(task.id);
+});
+safetyGuardianBtn?.addEventListener("pointerdown", startSafetyGuardianDrag);
+safetyGuardianBtn?.addEventListener("click", (event) => {
+  if (safetyGuardianDrag?.moved) {
+    event.preventDefault();
+    safetyGuardianDrag = null;
+    return;
+  }
+  toggleSafetyGuardian(true);
+});
+safetyGuardianCloseBtn?.addEventListener("click", () => toggleSafetyGuardian(false));
+safetyGuardianPanel?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-safety-action]");
+  if (actionButton) setSafetyGuardianMode(actionButton.dataset.safetyAction);
+});
+safetyGuardianForm?.addEventListener("submit", handleSafetyGuardianSubmit);
 
 backToChatBtn.addEventListener("click", showChatWorkspace);
 uploadTriggerBtn.addEventListener("click", (event) => {
@@ -483,7 +601,15 @@ function openAssistant(mode) {
   homePage.hidden = true;
   assistantPage.hidden = false;
   knowledgeWorkspace.hidden = true;
-  chatStage.hidden = false;
+  const isAffairs = currentMode === "affairs";
+  assistantPage.classList.toggle("affairs-mode", isAffairs);
+  chatStage.hidden = isAffairs;
+  affairsDashboard.hidden = !isAffairs;
+  affairsProfileSwitch.hidden = !isAffairs;
+  affairsSidebar.hidden = !isAffairs;
+  affairsNotificationBtn.hidden = !isAffairs;
+  if (safetyGuardianBtn) safetyGuardianBtn.hidden = !isAffairs;
+  if (!isAffairs) toggleSafetyGuardian(false);
   modeTitle.textContent = config.title;
   modeSubtitle.textContent = config.subtitle;
   assistantLogo.textContent = config.logo;
@@ -495,7 +621,13 @@ function openAssistant(mode) {
   messages.innerHTML = "";
   currentSessionId = null;
   exitFeatureWorkbench();
-  input.focus();
+  if (isAffairs) {
+    renderAffairsDashboard();
+    restoreSafetyGuardianPosition();
+    affairsSearchInput.focus();
+  } else {
+    input.focus();
+  }
   refreshAll().catch(() => {});
 }
 
@@ -992,6 +1124,7 @@ async function runArtifact(endpoint, pendingText, extra = {}) {
 
 function openKnowledgeWorkspace() {
   chatStage.hidden = true;
+  affairsDashboard.hidden = true;
   knowledgeWorkspace.hidden = false;
   backToChatBtn.textContent = `‹ 返回${assistantModes[currentMode].title}`;
   selectKnowledgeTab("documents");
@@ -1000,8 +1133,11 @@ function openKnowledgeWorkspace() {
 
 function showChatWorkspace() {
   knowledgeWorkspace.hidden = true;
-  chatStage.hidden = false;
-  input.focus();
+  const isAffairs = currentMode === "affairs";
+  affairsDashboard.hidden = !isAffairs;
+  chatStage.hidden = isAffairs;
+  if (isAffairs) affairsSearchInput.focus();
+  else input.focus();
 }
 
 function selectKnowledgeTab(tab) {
@@ -1313,12 +1449,25 @@ async function refreshAll() {
 
 async function loadStatus() {
   const data = await fetchJson("/api/status");
-  setApiLabel(data.mock_mode);
-  apiStatus.textContent = `${data.model_name} · 文档 ${data.document_count} · 片段 ${data.chunk_count}`;
+  let modelConfig = null;
+  try {
+    modelConfig = await fetchJson("/api/model/config");
+  } catch {
+    modelConfig = null;
+  }
+  setApiLabel(data.mock_mode, modelConfig);
+  const apiText = modelConfig?.configured
+    ? `${modelConfig.model_name} · 接口已配置`
+    : `${data.model_name} · 接口未配置完整`;
+  apiStatus.textContent = `${apiText} · 文档 ${data.document_count} · 片段 ${data.chunk_count}`;
 }
 
-function setApiLabel(isMock) {
-  const label = isMock ? "API 服务 · 模拟模式" : "API 服务 · 真实 API";
+function setApiLabel(isMock, modelConfig = null) {
+  const label = isMock
+    ? "API 服务 · 模拟模式"
+    : modelConfig?.configured
+      ? "API 服务 · 真实 API 已配置"
+      : "API 服务 · 等待配置";
   statusBadge.textContent = label;
   homeStatusBadge.textContent = label;
 }
@@ -1480,13 +1629,601 @@ async function loadApiCalls() {
     : '<div class="muted">暂无调用</div>';
 }
 
+function getAffairsData() {
+  return window.AFFAIRS_DEMO_DATA || { profiles: {}, sharedServices: [], updatedAt: "" };
+}
+
+function getAffairsProfile() {
+  const profiles = getAffairsData().profiles;
+  if (!profiles[currentAffairsProfileId]) currentAffairsProfileId = "undergraduate";
+  return profiles[currentAffairsProfileId];
+}
+
+function getAffairsStorageKey(type) {
+  return `affairs_${type}_${currentAffairsProfileId}`;
+}
+
+function loadAffairsTaskState() {
+  const profile = getAffairsProfile();
+  affairsTasks = JSON.parse(JSON.stringify(profile.tasks || []));
+  const saved = JSON.parse(localStorage.getItem(getAffairsStorageKey("tasks")) || "{}");
+  affairsTasks.forEach((task) => {
+    const checked = saved[task.id];
+    if (!Array.isArray(checked)) return;
+    task.materials.forEach((material, index) => {
+      if (typeof checked[index] === "boolean") material.checked = checked[index];
+    });
+  });
+}
+
+function saveAffairsTaskState() {
+  const state = Object.fromEntries(
+    affairsTasks.map((task) => [task.id, task.materials.map((material) => Boolean(material.checked))])
+  );
+  localStorage.setItem(getAffairsStorageKey("tasks"), JSON.stringify(state));
+}
+
+function renderAffairsDashboard() {
+  const profile = getAffairsProfile();
+  if (!profile) return;
+  loadAffairsTaskState();
+  affairsProfileSelect.value = profile.id;
+  affairsProfileAvatar.textContent = profile.name.slice(0, 1);
+  affairsProfileName.textContent = profile.name;
+  affairsProfileMeta.textContent = `${profile.level} · ${profile.role}`;
+  affairsGreetingTitle.innerHTML = `你好，${escapeHtml(profile.name)} <span aria-hidden="true">👋</span>`;
+  affairsGreetingText.textContent = profile.greeting;
+  affairsProfileFacts.innerHTML = [profile.level, profile.grade, profile.college, profile.campus]
+    .map((item) => `<span>${escapeHtml(item)}</span>`)
+    .join("");
+  affairsQuickQuestions.innerHTML = profile.quickQuestions
+    .map((question) => `<button type="button" data-affairs-query="${escapeHtml(question)}">${escapeHtml(question)}</button>`)
+    .join("");
+  affairsDataUpdatedAt.textContent = `演示数据更新：${getAffairsData().updatedAt}`;
+  renderAffairsTasks();
+  renderAffairsPriorities();
+  renderAffairsServices();
+  renderAffairsNotices([], { loading: true });
+  loadAffairsNotices();
+  renderAffairsRecent();
+  updateSafetyGuardianProfile();
+}
+
+function updateSafetyGuardianProfile() {
+  if (!safetyGuardianProfile) return;
+  const profile = getAffairsProfile();
+  safetyGuardianProfile.textContent = `${profile.name} · ${profile.level} · ${profile.campus}`;
+}
+
+function restoreSafetyGuardianPosition() {
+  if (!safetyGuardianBtn) return;
+  const saved = JSON.parse(localStorage.getItem("safety_guardian_position") || "null");
+  if (!saved || typeof saved.left !== "number" || typeof saved.top !== "number") return;
+  placeSafetyGuardian(saved.left, saved.top);
+}
+
+function startSafetyGuardianDrag(event) {
+  if (!safetyGuardianBtn) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  safetyGuardianDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top,
+    moved: false,
+  };
+  safetyGuardianBtn.setPointerCapture?.(event.pointerId);
+  safetyGuardianBtn.classList.add("dragging");
+  safetyGuardianBtn.addEventListener("pointermove", moveSafetyGuardian);
+  safetyGuardianBtn.addEventListener("pointerup", stopSafetyGuardianDrag, { once: true });
+  safetyGuardianBtn.addEventListener("pointercancel", stopSafetyGuardianDrag, { once: true });
+}
+
+function moveSafetyGuardian(event) {
+  if (!safetyGuardianDrag || !safetyGuardianBtn) return;
+  const dx = event.clientX - safetyGuardianDrag.startX;
+  const dy = event.clientY - safetyGuardianDrag.startY;
+  if (Math.abs(dx) + Math.abs(dy) > 6) safetyGuardianDrag.moved = true;
+  placeSafetyGuardian(safetyGuardianDrag.left + dx, safetyGuardianDrag.top + dy);
+  if (!safetyGuardianPanel.hidden) positionSafetyGuardianPanel();
+}
+
+function stopSafetyGuardianDrag(event) {
+  if (!safetyGuardianBtn || !safetyGuardianDrag) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  safetyGuardianBtn.releasePointerCapture?.(event.pointerId);
+  safetyGuardianBtn.classList.remove("dragging");
+  safetyGuardianBtn.removeEventListener("pointermove", moveSafetyGuardian);
+  localStorage.setItem("safety_guardian_position", JSON.stringify({ left: rect.left, top: rect.top }));
+}
+
+function placeSafetyGuardian(left, top) {
+  const margin = 10;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  const width = rect.width || 190;
+  const height = rect.height || 86;
+  const safeLeft = Math.max(margin, Math.min(window.innerWidth - width - margin, left));
+  const safeTop = Math.max(margin, Math.min(window.innerHeight - height - margin, top));
+  safetyGuardianBtn.style.left = `${safeLeft}px`;
+  safetyGuardianBtn.style.top = `${safeTop}px`;
+  safetyGuardianBtn.style.right = "auto";
+  safetyGuardianBtn.style.bottom = "auto";
+}
+
+function positionSafetyGuardianPanel() {
+  if (!safetyGuardianBtn || !safetyGuardianPanel) return;
+  const btn = safetyGuardianBtn.getBoundingClientRect();
+  const panelWidth = Math.min(420, window.innerWidth - 30);
+  const left = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, btn.right - panelWidth));
+  const topCandidate = btn.top - safetyGuardianPanel.offsetHeight - 12;
+  const top = topCandidate > 10 ? topCandidate : Math.min(window.innerHeight - 20, btn.bottom + 12);
+  safetyGuardianPanel.style.left = `${left}px`;
+  safetyGuardianPanel.style.top = `${top}px`;
+  safetyGuardianPanel.style.right = "auto";
+  safetyGuardianPanel.style.bottom = "auto";
+}
+
+function toggleSafetyGuardian(open) {
+  if (!safetyGuardianPanel) return;
+  safetyGuardianPanel.hidden = !open;
+  if (open) {
+    updateSafetyGuardianProfile();
+    setSafetyGuardianMode(safetyGuardianMode);
+    positionSafetyGuardianPanel();
+    safetyLocationInput?.focus();
+  }
+}
+
+function setSafetyGuardianMode(mode) {
+  safetyGuardianMode = mode || "sos";
+  safetyGuardianPanel?.querySelectorAll("[data-safety-action]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.safetyAction === safetyGuardianMode);
+  });
+  if (!safetyDescriptionInput) return;
+  const placeholders = {
+    sos: "例如：我现在身体不舒服，旁边有同学陪同，位置在教学楼 A 区一楼。",
+    report: "例如：沁园宿舍 3 栋门口路灯不亮，夜间通行有安全隐患。",
+    care: "例如：我最近压力很大、睡不好，想先找一个安静的方式缓一缓。",
+  };
+  safetyDescriptionInput.placeholder = placeholders[safetyGuardianMode] || placeholders.sos;
+}
+
+async function handleSafetyGuardianSubmit(event) {
+  event.preventDefault();
+  const profile = getAffairsProfile();
+  const location = safetyLocationInput.value.trim() || "未填写具体地点";
+  const description = safetyDescriptionInput.value.trim() || "用户未填写详细描述";
+  const meta = {
+    sos: {
+      title: "紧急求助",
+      level: "高",
+      next: "请优先联系身边同学、辅导员/导师或宿管；现实危险立即拨打 110 / 119 / 120。",
+      className: "danger",
+    },
+    report: {
+      title: "隐患上报",
+      level: "中",
+      next: "已整理为演示工单，可转交保卫处、总务处或智慧校园建设中心核验处理。",
+      className: "",
+    },
+    care: {
+      title: "心理安抚",
+      level: "关怀",
+      next: "先做 3 次慢呼吸，并尽快联系可信同学、辅导员/导师或学校心理支持渠道。",
+      className: "",
+    },
+  }[safetyGuardianMode] || {};
+  const question = `${meta.title}：${location}`;
+  rememberAffairsQuestion(question);
+  safetyGuardianResult.innerHTML = "<span>正在生成安全记录…</span>";
+  try {
+    let data = {};
+    if (safetyGuardianMode === "sos") {
+      data = await postJson("/api/safety/sos", {
+        event_type: "快速求助",
+        location,
+        note: description,
+        contact: profile.name,
+      });
+    } else if (safetyGuardianMode === "report") {
+      data = await postJson("/api/safety/reports", {
+        category: "校园隐患",
+        description,
+        location,
+        urgency: "较急",
+        privacy: "仅处置部门可见",
+      });
+    } else {
+      data = await postJson("/api/chat", {
+        mode: "safety",
+        message: `学生身份：${profile.level}，地点：${location}。学生描述：${description}。请给出简短心理安抚和下一步求助建议。`,
+        session_id: localStorage.getItem(getAffairsStorageKey("safety_session")) || null,
+      });
+      if (data.session_id) localStorage.setItem(getAffairsStorageKey("safety_session"), data.session_id);
+    }
+    const recordId = data.id || data.session_id || `SAFE-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`;
+    const answer = data.answer ? `<span>${escapeHtml(data.answer)}</span>` : "";
+    safetyGuardianResult.innerHTML = `
+      <strong class="${meta.className}">${escapeHtml(meta.title)}记录已生成：${escapeHtml(recordId)}</strong>
+      <span>身份：${escapeHtml(profile.level)} · ${escapeHtml(profile.campus)}</span>
+      <span>地点：${escapeHtml(location)}</span>
+      <span>风险等级：${escapeHtml(meta.level)}</span>
+      <span>情况：${escapeHtml(description)}</span>
+      <span>下一步：${escapeHtml(data.message || meta.next)}</span>
+      ${answer}`;
+  } catch (error) {
+    safetyGuardianResult.innerHTML = `
+      <strong class="danger">安全记录生成失败</strong>
+      <span>${escapeHtml(error.message)}</span>
+      <span>现实紧急危险请立即拨打 110 / 119 / 120。</span>`;
+  }
+}
+
+function renderAffairsTasks() {
+  affairsTaskCount.textContent = `共 ${affairsTasks.length} 项`;
+  affairsTaskGrid.innerHTML = affairsTasks
+    .map((task) => {
+      const done = task.materials.filter((item) => item.checked).length;
+      const total = task.materials.length || 1;
+      const progress = task.status === "completed" ? 100 : Math.round((done / total) * 100);
+      const status = affairsStatusMeta(task.status);
+      const deadline = `<span>${escapeHtml(formatAffairsTime(task, "无统一截止时间"))}</span>`;
+      return `
+        <article class="affairs-task-card">
+          <div class="affairs-card-title-row">
+            <h4>${escapeHtml(task.title)}</h4>
+            <span class="source-badge ${sourceStatusClass(task.sourceStatus)}">${escapeHtml(task.sourceStatus)}</span>
+          </div>
+          <div class="affairs-task-status"><strong class="${status.className}">${status.label}</strong><span>${done}/${total}</span></div>
+          <div class="affairs-progress"><i style="width:${progress}%"></i></div>
+          <p><b>下一步：</b>${escapeHtml(task.nextStep)}</p>
+          <div class="affairs-card-meta">${deadline}<span>${escapeHtml(task.department)}</span></div>
+          <button class="affairs-outline-btn" type="button" data-affairs-action="task-detail" data-task-id="${escapeHtml(task.id)}">
+            ${task.status === "completed" ? "查看结果" : progress > 0 ? "继续办理" : "查看流程"}
+          </button>
+        </article>`;
+    })
+    .join("");
+}
+
+function renderAffairsPriorities() {
+  const profile = getAffairsProfile();
+  const saved = new Set(JSON.parse(localStorage.getItem(getAffairsStorageKey("priorities")) || "[]"));
+  affairsPriorityGrid.innerHTML = profile.priorities
+    .map((item) => `
+      <article class="affairs-priority-card ${escapeHtml(item.tone)}">
+        <div class="priority-icon">${escapeHtml(item.icon)}</div>
+        <span class="source-badge ${sourceStatusClass(item.sourceStatus)}">${escapeHtml(item.sourceStatus)}</span>
+        <h4>${escapeHtml(item.title)}</h4>
+        <p>${escapeHtml(item.description)}</p>
+        <strong class="priority-deadline">${formatAffairsDeadline(item)}</strong>
+        <div class="priority-actions">
+          <button type="button" data-affairs-action="priority-source" data-priority-id="${escapeHtml(item.id)}">${item.timeBasis ? "查看依据" : "查看详情"}</button>
+          <button class="priority-add ${saved.has(item.id) ? "added" : ""}" type="button" data-affairs-action="priority-add" data-priority-id="${escapeHtml(item.id)}">${saved.has(item.id) ? "已加入" : "+ 待办"}</button>
+        </div>
+      </article>`)
+    .join("");
+}
+
+function renderAffairsServices() {
+  const isGraduate = currentAffairsProfileId === "graduate";
+  affairsServiceGrid.innerHTML = getAffairsData().sharedServices
+    .map((service) => `
+      <a class="affairs-service-card" href="${escapeHtml(service.sourceUrl)}" target="_blank" rel="noreferrer">
+        <span>${escapeHtml(service.icon)}</span>
+        <strong>${escapeHtml(service.title)}</strong>
+        <small>${escapeHtml(isGraduate ? service.graduateDesc : service.undergradDesc)}</small>
+        <em class="${sourceStatusClass(service.sourceStatus)}">${escapeHtml(service.sourceStatus)}</em>
+      </a>`)
+    .join("");
+}
+
+function renderAffairsNotices(notices = [], options = {}) {
+  if (options.loading) {
+    affairsNoticeList.innerHTML = Array.from({ length: 4 }, () => `
+      <article class="affairs-notice-card news-loading-card">
+        <span class="notice-icon"></span><div><i></i><i></i><i></i></div>
+      </article>`).join("");
+    return;
+  }
+  if (!notices.length) {
+    affairsNoticeList.innerHTML = `
+      <div class="affairs-news-empty">
+        <strong>暂未读取到匹配通知</strong>
+        <span>${escapeHtml(options.message || "请稍后刷新，或检查本地服务的网络连接。")}</span>
+      </div>`;
+    return;
+  }
+  affairsNoticeList.innerHTML = notices
+    .map((notice) => `
+      <article class="affairs-notice-card">
+        <span class="notice-icon">${escapeHtml(notice.icon || "📢")}</span>
+        <div>
+          <div class="affairs-card-title-row">
+            <h4>${escapeHtml(notice.title)}</h4>
+            <span class="source-badge ${sourceStatusClass(notice.sourceStatus)}">${escapeHtml(notice.sourceStatus)}</span>
+          </div>
+          <p>${escapeHtml(notice.summary)}</p>
+          <div class="affairs-news-meta">
+            <span>${escapeHtml(notice.matchReason)}</span>
+            <span>发布于 ${escapeHtml(notice.publishedDate)}</span>
+            <b class="${notice.statusLabel === "已截止" ? "expired" : ""}">${escapeHtml(notice.statusLabel)}</b>
+          </div>
+        </div>
+        <div class="notice-actions">
+          <strong>${escapeHtml(notice.sourceName)}</strong>
+          <a href="${escapeHtml(notice.sourceUrl)}" target="_blank" rel="noreferrer">查看具体通知 ↗</a>
+        </div>
+      </article>`)
+    .join("");
+}
+
+async function loadAffairsNotices(forceRefresh = false) {
+  const profile = getAffairsProfile();
+  const requestedProfile = profile.id;
+  const requestId = ++affairsNewsRequestId;
+  affairsNewsRefreshBtn.disabled = true;
+  affairsNewsRefreshBtn.textContent = "更新中…";
+  affairsNoticeMeta.textContent = `${profile.level} · 按发布时间排序`;
+  try {
+    const params = new URLSearchParams({
+      profile: requestedProfile,
+      grade: profile.grade,
+      limit: "6",
+    });
+    if (forceRefresh) params.set("refresh", "true");
+    const response = await fetch(`/api/affairs/notices?${params}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (requestId !== affairsNewsRequestId || requestedProfile !== currentAffairsProfileId) return;
+    renderAffairsNotices(data.items || []);
+    const updateTime = new Date(data.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    affairsNoticeMeta.textContent = data.liveCount
+      ? `${profile.level} · 官网实时聚合 · 已概括 ${data.contentFetchedCount || 0} 篇 · ${updateTime}`
+      : `${profile.level} · 已核验回退数据 · ${updateTime}`;
+  } catch (error) {
+    if (requestId !== affairsNewsRequestId) return;
+    affairsNoticeMeta.textContent = `${profile.level} · 更新失败`;
+    renderAffairsNotices([], { message: `资讯接口暂不可用：${error.message}` });
+  } finally {
+    if (requestId === affairsNewsRequestId) {
+      affairsNewsRefreshBtn.disabled = false;
+      affairsNewsRefreshBtn.textContent = "↻ 刷新资讯";
+    }
+  }
+}
+
+function renderAffairsRecent() {
+  const profile = getAffairsProfile();
+  const saved = JSON.parse(localStorage.getItem(getAffairsStorageKey("recent")) || "[]");
+  const items = [...new Set([...saved, ...profile.recent])].slice(0, 4);
+  affairsRecentList.innerHTML = items
+    .map((question) => `<button type="button" data-affairs-query="${escapeHtml(question)}"><span>${escapeHtml(question)}</span><small>点击再次询问</small><b>→</b></button>`)
+    .join("");
+}
+
+function affairsStatusMeta(status) {
+  return {
+    preparing: { label: "材料准备中", className: "preparing" },
+    ready: { label: "可办理", className: "ready" },
+    not_started: { label: "待开始", className: "not-started" },
+    completed: { label: "已完成", className: "completed" },
+  }[status] || { label: "进行中", className: "preparing" };
+}
+
+function sourceStatusClass(status) {
+  if (String(status).includes("演示")) return "demo";
+  if (String(status).includes("核验") || String(status).includes("实时")) return "official";
+  return "pending";
+}
+
+function formatAffairsTime(item, emptyLabel = "可随时查看") {
+  if (item.deadline) {
+    const deadline = new Date(`${item.deadline}T23:59:59`);
+    const days = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
+    const countdown = days >= 0 ? `还有 ${days} 天` : `已过 ${Math.abs(days)} 天`;
+    return `${item.deadline} · ${countdown}`;
+  }
+  if (item.expectedWindow) return `${item.expectedWindow} · 待官方通知`;
+  return emptyLabel;
+}
+
+function formatAffairsDeadline(item) {
+  return formatAffairsTime(item);
+}
+
+function handleAffairsDashboardClick(event) {
+  const queryButton = event.target.closest("[data-affairs-query]");
+  if (queryButton) {
+    affairsSearchInput.value = queryButton.dataset.affairsQuery;
+    answerAffairsQuestion(queryButton.dataset.affairsQuery);
+    return;
+  }
+  const actionButton = event.target.closest("[data-affairs-action]");
+  if (!actionButton) return;
+  const action = actionButton.dataset.affairsAction;
+  if (action === "task-detail" || action === "notice-task") {
+    openAffairsTaskDetail(actionButton.dataset.taskId);
+  }
+  if (action === "priority-source") {
+    const item = getAffairsProfile().priorities.find((priority) => priority.id === actionButton.dataset.priorityId);
+    if (item) window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
+  }
+  if (action === "priority-add") toggleAffairsPriority(actionButton.dataset.priorityId);
+}
+
+function toggleAffairsPriority(priorityId) {
+  const key = getAffairsStorageKey("priorities");
+  const saved = new Set(JSON.parse(localStorage.getItem(key) || "[]"));
+  if (saved.has(priorityId)) saved.delete(priorityId);
+  else saved.add(priorityId);
+  localStorage.setItem(key, JSON.stringify([...saved]));
+  renderAffairsPriorities();
+}
+
+function openAffairsTaskDetail(taskId) {
+  const task = affairsTasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const done = task.materials.filter((item) => item.checked).length;
+  affairsDetailBody.innerHTML = `
+    <p class="affairs-eyebrow">${escapeHtml(task.department)}</p>
+    <h2 id="affairsDetailTitle">${escapeHtml(task.title)}</h2>
+    <div class="affairs-detail-badges">
+      <span class="source-badge ${sourceStatusClass(task.sourceStatus)}">${escapeHtml(task.sourceStatus)}</span>
+      <span>${affairsStatusMeta(task.status).label}</span>
+    </div>
+    <p class="affairs-detail-summary">${escapeHtml(task.summary)}</p>
+    <dl class="affairs-detail-list">
+      <div><dt>当前进度</dt><dd>${done}/${task.materials.length} 项已完成</dd></div>
+      <div><dt>下一步</dt><dd>${escapeHtml(task.nextStep)}</dd></div>
+      <div><dt>时间状态</dt><dd>${escapeHtml(formatAffairsTime(task, "以官方通知或办理窗口为准"))}</dd></div>
+      ${task.timeBasis ? `<div><dt>时间依据</dt><dd>${escapeHtml(task.timeBasis)}</dd></div>` : ""}
+    </dl>
+    <h3 class="affairs-material-title">材料与步骤</h3>
+    <div class="affairs-material-list">
+      ${task.materials.map((material, index) => `
+        <label>
+          <input type="checkbox" data-affairs-material="${index}" data-task-id="${escapeHtml(task.id)}" ${material.checked ? "checked" : ""} />
+          <span>${escapeHtml(material.name)}</span>
+        </label>`).join("")}
+    </div>
+    ${renderAffairsSourceLinks(task)}`;
+  affairsDetailModal.hidden = false;
+}
+
+function renderAffairsSourceLinks(record) {
+  const sources = Array.isArray(record.sourceUrls) && record.sourceUrls.length
+    ? record.sourceUrls
+    : [{ title: record.sourceTitle || "官方来源", url: record.sourceUrl }];
+  return sources
+    .filter((source) => source?.url)
+    .map((source) => `<a class="affairs-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">查看${escapeHtml(source.title || "官方来源")} ↗</a>`)
+    .join("");
+}
+
+function closeAffairsDetail() {
+  affairsDetailModal.hidden = true;
+}
+
+function rememberAffairsQuestion(question) {
+  const key = getAffairsStorageKey("recent");
+  const saved = JSON.parse(localStorage.getItem(key) || "[]");
+  localStorage.setItem(key, JSON.stringify([question, ...saved.filter((item) => item !== question)].slice(0, 4)));
+  renderAffairsRecent();
+}
+
+function findLocalAffairsAnswer(question) {
+  const profile = getAffairsProfile();
+  const tests = [
+    { regex: /图书|借阅/, keywords: ["图书", "借阅"] },
+    { regex: /校园卡|一卡通|挂失/, keywords: ["校园卡", "一卡通", "挂失"] },
+    { regex: /成绩单|证明|打印/, keywords: ["成绩单", "证明", "打印"] },
+    { regex: /奖学金|助学金|奖助/, keywords: ["奖学金", "助学金", "奖助"] },
+    { regex: /四六级|四级|六级|CET/i, keywords: ["四六级", "四级", "六级"] },
+    { regex: /开题|论文|培养计划/, keywords: ["开题", "论文", "培养"] },
+  ];
+  if (/学生证/.test(question)) {
+    return `### 学生证补办\n\n公开网站暂未披露完整办理流程，当前状态为 **待学校确认**。建议先咨询所在学院或书院辅导员，确认申请表、照片、遗失说明及办理地点后再前往，避免依据演示信息办理。`;
+  }
+  const matched = tests.find((item) => item.regex.test(question));
+  if (!matched) return "";
+  const records = [
+    ...affairsTasks.map((item) => ({ ...item, kind: "事务", text: `${item.title}${item.summary}${item.nextStep}` })),
+    ...profile.priorities.map((item) => ({ ...item, kind: "重点", text: `${item.title}${item.description}` })),
+    ...profile.notices.map((item) => ({ ...item, kind: "通知", text: `${item.title}${item.summary}` })),
+    ...getAffairsData().sharedServices.map((item) => ({ ...item, kind: "服务", text: `${item.title}${item.undergradDesc}${item.graduateDesc}` })),
+  ];
+  const record = records.find((item) => matched.keywords.some((keyword) => item.text.includes(keyword)));
+  if (!record) return "";
+  const detail = record.nextStep || record.description || record.summary || (currentAffairsProfileId === "graduate" ? record.graduateDesc : record.undergradDesc);
+  const materialText = record.materials?.length
+    ? `\n\n**材料与步骤**\n${record.materials.map((item) => `- ${item.checked ? "已完成" : "待完成"}：${item.name}`).join("\n")}`
+    : "";
+  const timeText = record.deadline || record.expectedWindow
+    ? `\n\n**时间**：${formatAffairsTime(record, "待官方通知")}`
+    : "";
+  const timeBasis = record.timeBasis ? `\n\n**时间依据**：${record.timeBasis}` : "";
+  const sources = Array.isArray(record.sourceUrls) && record.sourceUrls.length
+    ? record.sourceUrls
+    : [{ title: record.sourceTitle || "官方来源", url: record.sourceUrl }];
+  const sourceLinks = sources.filter((source) => source?.url).map((source) => `[${source.title || "官方来源"}](${source.url})`).join(" · ");
+  return `### ${record.title}\n\n**身份匹配**：${profile.level} · ${record.kind}\n\n**办理提示**：${detail}${materialText}${timeText}${timeBasis}\n\n**信息状态**：${record.sourceStatus}\n\n${sourceLinks}`;
+}
+
+async function answerAffairsQuestion(rawQuestion) {
+  const question = String(rawQuestion || "").trim();
+  if (!question) return;
+  affairsSearchInput.value = "";
+  affairsAgentResult.hidden = false;
+  affairsAgentResultBody.innerHTML = "<p>正在根据学生身份检索事务、通知与官方入口…</p>";
+  rememberAffairsQuestion(question);
+  const localAnswer = findLocalAffairsAnswer(question);
+  if (localAnswer) {
+    affairsAgentResultBody.innerHTML = renderMarkdown(localAnswer);
+    affairsAgentResult.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+  const profile = getAffairsProfile();
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "affairs",
+        message: `用户身份：${profile.level}，${profile.grade}，${profile.college}。问题：${question}。请按办理条件、材料、步骤、时间、入口和待确认项回答；不确定的信息必须明确说明。`,
+        session_id: localStorage.getItem(getAffairsStorageKey("session")) || null,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    localStorage.setItem(getAffairsStorageKey("session"), data.session_id);
+    affairsAgentResultBody.innerHTML = `${renderMarkdown(data.answer)}${renderReferences(data.references || [])}`;
+  } catch (error) {
+    affairsAgentResultBody.innerHTML = renderMarkdown(`事务检索暂时不可用：${error.message}\n\n你仍可使用下方事务卡片和官方入口。`);
+  }
+  affairsAgentResult.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
-loadAuthPortal();
-refreshAll().catch(() => {
-  setApiLabel(true);
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(formatApiError(error, response.status));
+  }
+  return response.json();
+}
+
+function formatApiError(error, status) {
+  if (Array.isArray(error?.detail)) {
+    return error.detail
+      .map((item) => {
+        const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
+        return `${field ? `${field}：` : ""}${item.msg || "参数校验失败"}`;
+      })
+      .join("；");
+  }
+  if (typeof error?.detail === "string") return error.detail;
+  if (typeof error?.message === "string") return error.message;
+  return `HTTP ${status}`;
+}
+
+window.addEventListener("resize", () => {
+  if (!safetyGuardianBtn || safetyGuardianBtn.hidden) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  placeSafetyGuardian(rect.left, rect.top);
+  if (safetyGuardianPanel && !safetyGuardianPanel.hidden) positionSafetyGuardianPanel();
 });
+
+loadAuthPortal();
+openAssistant("affairs");

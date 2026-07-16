@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>守望校园安全助手</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/safety.css?v=20260716-safety-3" />
+  </head>
+  <body>
+    <header class="safety-header">
+      <a class="back-link" href="/">‹ 返回事务助手</a>
+      <div class="safety-brand"><span>守</span><div><strong>守望校园安全助手</strong><small>预防 · 发现 · 求助 · 处置 · 反馈</small></div></div>
+      <div id="campusStatus" class="campus-status">状态读取中</div>
+    </header>
+
+    <nav class="safety-nav" aria-label="安全助手功能">
+      <button class="active" data-panel="overview">首页</button>
+      <button data-panel="report">事件上报</button>
+      <button data-panel="map">安全地图</button>
+      <button data-panel="notices">通知中心</button>
+      <button data-panel="guardian">同行守护</button>
+      <button data-panel="classroom">安全课堂</button>
+      <button data-panel="lost">失物招领</button>
+      <button data-panel="assistant">AI安全问答</button>
+    </nav>
+
+    <main class="safety-main">
+      <section class="safety-panel active" data-panel-content="overview">
+        <div class="overview-grid">
+          <article class="sos-card">
+            <div><p class="eyebrow">Emergency Assistance</p><h1>遇到危险，快速求助</h1><p>本原型不会连接真实接警台。现实危险请优先拨打公共紧急电话。</p></div>
+            <button id="sosButton" class="sos-button" type="button"><span>SOS</span><small>长按 2 秒发起演示求助</small></button>
+            <div class="emergency-links">
+              <a href="tel:110"><b>110</b><span>公安报警</span></a>
+              <a href="tel:119"><b>119</b><span>火警</span></a>
+              <a href="tel:120"><b>120</b><span>医疗急救</span></a>
+            </div>
+          </article>
+          <article class="status-card">
+            <span class="status-dot"></span><small>校园安全状态</small><h2 id="statusLevel">正常</h2>
+            <p id="statusSource">演示数据 · 待接入保卫处</p>
+            <button class="text-button" data-go="notices">查看影响因素与通知 →</button>
+          </article>
+        </div>
+        <section class="section-block">
+          <div class="section-heading"><div><p class="eyebrow">Quick Access</p><h2>常用安全功能</h2></div></div>
+          <div class="feature-grid">
+            <button data-go="report"><span>报</span><strong>隐患上报</strong><small>创建可追踪工单</small></button>
+            <button data-go="map"><span>图</span><strong>安全地图</strong><small>查找安保、医疗与AED</small></button>
+            <button data-go="guardian"><span>伴</span><strong>同行守护</strong><small>创建临时安全行程</small></button>
+            <button data-go="classroom"><span>课</span><strong>安全课堂</strong><small>30秒应急卡与专题</small></button>
+            <button data-go="lost"><span>寻</span><strong>失物招领</strong><small>发布、筛选与核验</small></button>
+            <button data-go="assistant"><span>AI</span><strong>安全问答</strong><small>获得分场景行动建议</small></button>
+          </div>
+        </section>
+        <section class="section-block">
+          <div class="section-heading"><div><p class="eyebrow">Safety Alerts</p><h2>安全动态</h2></div><button class="text-button" data-go="notices">全部通知 →</button></div>
+          <div id="overviewNotices" class="notice-list"></div>
+        </section>
+      </section>
+
+      <section class="safety-panel" data-panel-content="report">
+        <div class="panel-title"><p class="eyebrow">Incident Report</p><h1>事件与隐患上报</h1><p>提交后生成工单号。欺凌、骚扰等敏感事件可选择保密范围。</p></div>
+        <div class="two-column">
+          <form id="reportForm" class="safety-form">
+            <label>事件类型<select name="category" required><option>设施故障</option><option>消防隐患</option><option>交通隐患</option><option>治安风险</option><option>食品卫生</option><option>实验室安全</option><option>网络诈骗</option><option>欺凌/骚扰</option><option>其他</option></select></label>
+            <label>发生位置<input name="location" placeholder="例如：教学楼 A 区一层" required /></label>
+            <label>情况描述<textarea name="description" rows="5" minlength="5" placeholder="说明发生时间、是否仍在发生、是否有人受伤等" required></textarea></label>
+            <div class="form-row"><label>紧急程度<select name="urgency"><option>一般</option><option>较急</option><option>紧急</option></select></label><label>隐私范围<select name="privacy"><option>实名可追踪</option><option>仅处置部门可见</option><option>保密上报</option></select></label></div>
+            <p class="privacy-note">请勿上传无关人员身份证号、电话或未经处理的人脸信息。现实紧急危险请直接报警。</p>
+            <button class="primary-action" type="submit">提交安全工单</button>
+            <p id="reportResult" class="form-result" aria-live="polite"></p>
+          </form>
+          <div><h2>最近上报</h2><div id="reportList" class="record-list"></div></div>
+        </div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="map">
+        <div class="panel-title"><p class="eyebrow">Safety Map</p><h1>校园安全地图</h1><p>当前为演示点位，正式上线前须由学校责任部门核验坐标、电话和巡检状态。</p></div>
+        <div id="mapFilters" class="filter-row"><button class="active" data-filter="全部">全部</button><button data-filter="安保">安保</button><button data-filter="医疗">医疗</button><button data-filter="AED">AED</button><button data-filter="消防">消防</button></div>
+        <div class="map-layout"><div class="campus-map" aria-label="演示校园地图"><span class="road road-a"></span><span class="road road-b"></span><div class="building b1">教学区</div><div class="building b2">生活区</div><div class="building b3">体育馆</div><div class="building b4">中心广场</div><div id="mapPins"></div><div class="map-watermark">演示底图 · 非导航依据</div></div><div id="facilityList" class="facility-list"></div></div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="notices">
+        <div class="panel-title"><p class="eyebrow">Notification Center</p><h1>通知中心</h1><p>预警同时展示等级、发布部门、有效期和“现在应该做什么”。</p></div>
+        <div class="legend"><span class="red">红色 紧急</span><span class="orange">橙色 重要</span><span class="yellow">黄色 提醒</span><span class="blue">蓝色 一般</span></div>
+        <div id="noticeList" class="notice-list full"></div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="guardian">
+        <div class="panel-title"><p class="eyebrow">Guardian Trip</p><h1>同行守护</h1><p>仅创建临时行程，不持续后台追踪；到达后应尽快删除位置记录。</p></div>
+        <div class="two-column"><form id="tripForm" class="safety-form"><label>目的地<input name="destination" placeholder="例如：北门宿舍区" required /></label><label>可信联系人<input name="contact" placeholder="姓名或联系方式（演示数据）" required /></label><label>预计到达时间<select name="duration_minutes"><option value="15">15 分钟</option><option value="30" selected>30 分钟</option><option value="60">60 分钟</option><option value="120">2 小时</option></select></label><p class="privacy-note">联系人只能看到本次行程信息。原型不会发送真实短信，也不会自动报警。</p><button class="primary-action" type="submit">开始守护行程</button><p id="tripResult" class="form-result"></p></form><div><h2>当前与历史行程</h2><div id="tripList" class="record-list"></div></div></div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="classroom">
+        <div class="panel-title"><p class="eyebrow">Safety Classroom</p><h1>安全课堂</h1><p>危急时优先阅读30秒应急卡，日常再完成专题学习与情景测验。</p></div>
+        <div id="classList" class="class-grid"></div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="lost">
+        <div class="panel-title"><p class="eyebrow">Lost & Found</p><h1>失物招领</h1><p>证件号码、联系方式和精确宿舍位置不得公开展示。</p></div>
+        <div class="two-column"><form id="lostForm" class="safety-form"><div class="form-row"><label>信息类型<select name="item_type"><option>丢失</option><option>拾获</option></select></label><label>物品类别<select name="category"><option>校园卡/证件</option><option>电子设备</option><option>书籍资料</option><option>钥匙</option><option>其他</option></select></label></div><label>大致区域<input name="area" placeholder="例如：图书馆附近（不要填写宿舍门牌）" required /></label><label>公开描述<textarea name="description" rows="4" placeholder="不要写出用于认领核验的全部隐藏特征" required></textarea></label><button class="primary-action" type="submit">发布信息</button><p id="lostResult" class="form-result"></p></form><div><h2>最新信息</h2><div id="lostList" class="record-list"></div></div></div>
+      </section>
+
+      <section class="safety-panel" data-panel-content="assistant">
+        <div class="panel-title"><p class="eyebrow">AI Safety Assistant</p><h1>安全场景问答</h1><p>AI只提供行动建议，不认定事故责任，不替代警方、医护或学校正式处置。</p></div>
+        <div class="chat-shell"><div class="prompt-row"><button>遇到网络诈骗怎么办？</button><button>宿舍闻到焦糊味怎么办？</button><button>如何上报校园欺凌？</button></div><div id="safetyMessages" class="safety-messages"><div class="bot-message">你好，我是守望校园安全助手。请描述发生了什么、是否仍在发生、有没有人受伤。</div></div><form id="safetyChatForm" class="safety-chat-form"><textarea id="safetyInput" rows="3" placeholder="描述安全问题；现实紧急危险请立即拨打110、119或120" required></textarea><button type="submit">发送</button></form></div>
+      </section>
+    </main>
+
+    <div id="sosModal" class="safety-modal" hidden><div class="modal-card"><button id="closeSos" class="modal-close" type="button">×</button><p class="eyebrow danger">Emergency Demo</p><h2>确认发起演示求助</h2><p class="warning-box">这不会联系真实接警人员。如有现实危险，请立即拨打110、119或120。</p><form id="sosForm" class="safety-form"><label>事件类型<select name="event_type"><option>人身安全威胁</option><option>医疗急症</option><option>火灾/烟雾</option><option>其他紧急情况</option></select></label><label>当前位置<input id="sosLocation" name="location" value="位置待确认" required /></label><label>补充说明<textarea name="note" rows="3" placeholder="可选，简要说明现场情况"></textarea></label><button id="locateButton" class="secondary-action" type="button">获取浏览器定位</button><button class="danger-action" type="submit">确认发送演示求助</button></form><div id="sosResult" class="sos-result"></div></div></div>
+    <div id="toast" class="toast" hidden></div>
+    <script src="/static/safety.js?v=20260716-safety-3"></script>
+  </body>
+</html>
