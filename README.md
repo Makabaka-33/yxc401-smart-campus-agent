@@ -9,6 +9,7 @@
 学生事务助手第一版已在 `agent/student-affairs-dashboard` 分支开发，支持本科生与研究生身份切换、四大事务模块、事务 Agent 和官方资讯动态聚合。
 
 - [完整修改记录](docs/change_log_student_affairs_v1.md)
+- [每次 Commit 详情记录](docs/commit_details.md)
 - [MVP 范围与数据说明](docs/student_affairs_mvp.md)
 - [草稿 Pull Request #1](https://github.com/Makabaka-33/yxc401-smart-campus-agent/pull/1)
 

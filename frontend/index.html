@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智启校园教学管智能体</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="/static/styles.css?v=20260715-6" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260716-safety-3" />
   </head>
   <body>
     <main class="app-shell">
@@ -498,7 +498,65 @@
       </div>
     </div>
 
-    <script src="/static/affairs-data.js?v=20260715-6"></script>
-    <script src="/static/app.js?v=20260715-6"></script>
+    <button id="safetyGuardianBtn" class="safety-guardian-btn" type="button" aria-label="打开校园安全与关怀助手，可拖动调整位置" hidden>
+      <span class="guardian-face" aria-hidden="true">
+        <i></i>
+        <b></b>
+      </span>
+      <span class="guardian-copy">
+        <strong>守望安全</strong>
+        <em>可拖动 · SOS</em>
+      </span>
+    </button>
+
+    <div id="safetyGuardianPanel" class="safety-guardian-panel" hidden>
+      <div class="safety-guardian-card" role="dialog" aria-modal="false" aria-labelledby="safetyGuardianTitle">
+        <header>
+          <div>
+            <p class="affairs-eyebrow">Campus Safety</p>
+            <h2 id="safetyGuardianTitle">校园安全与关怀</h2>
+            <span id="safetyGuardianProfile">按当前学生身份生成建议</span>
+          </div>
+          <button id="safetyGuardianCloseBtn" type="button" aria-label="关闭校园安全助手">×</button>
+        </header>
+        <div class="safety-guardian-alert">
+          <strong>现实紧急危险请立即拨打 110 / 119 / 120</strong>
+          <span>本模块用于比赛演示，不会自动报警或替你提交正式工单。</span>
+        </div>
+        <div class="safety-guardian-actions">
+          <button type="button" data-safety-action="sos">
+            <b>SOS 快速求助</b>
+            <span>生成演示求助记录</span>
+          </button>
+          <button type="button" data-safety-action="report">
+            <b>隐患上报</b>
+            <span>路灯、漏水、门禁、消防等</span>
+          </button>
+          <button type="button" data-safety-action="care">
+            <b>心理安抚</b>
+            <span>先缓一缓，再找可信的人</span>
+          </button>
+          <a href="/static/safety.html" target="_blank" rel="noreferrer">
+            <b>进入安全中心</b>
+            <span>打开队友完整安全模块</span>
+          </a>
+        </div>
+        <form id="safetyGuardianForm" class="safety-guardian-form">
+          <label>
+            当前位置或地点
+            <input id="safetyLocationInput" type="text" placeholder="例如：沁园宿舍 3 栋门口" />
+          </label>
+          <label>
+            情况描述
+            <textarea id="safetyDescriptionInput" rows="3" placeholder="简单描述发生了什么、是否仍在发生、是否有人受伤"></textarea>
+          </label>
+          <button type="submit">生成安全事务记录</button>
+        </form>
+        <div id="safetyGuardianResult" class="safety-guardian-result" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <script src="/static/affairs-data.js?v=20260716-safety-3"></script>
+    <script src="/static/app.js?v=20260716-safety-3"></script>
   </body>
 </html>

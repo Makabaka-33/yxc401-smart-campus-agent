@@ -47,7 +47,7 @@ CHUNK_OVERLAP = 140
 load_dotenv(ROOT_DIR / ".env")
 
 
-AssistantMode = Literal["learning", "teaching", "affairs", "audit"]
+AssistantMode = Literal["learning", "teaching", "affairs", "audit", "safety"]
 
 
 class ChatRequest(BaseModel):
@@ -90,6 +90,34 @@ class MockLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=120)
 
 
+class SafetySosRequest(BaseModel):
+    event_type: str = Field(default="其他紧急情况", min_length=1, max_length=40)
+    location: str = Field(default="位置待确认", min_length=1, max_length=160)
+    note: str = Field(default="", max_length=500)
+    contact: str = Field(default="", max_length=40)
+
+
+class SafetyReportRequest(BaseModel):
+    category: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=5, max_length=1200)
+    location: str = Field(min_length=1, max_length=160)
+    urgency: str = Field(default="一般", max_length=20)
+    privacy: str = Field(default="实名可追踪", max_length=30)
+
+
+class SafetyTripRequest(BaseModel):
+    destination: str = Field(min_length=1, max_length=160)
+    contact: str = Field(min_length=1, max_length=80)
+    duration_minutes: int = Field(default=30, ge=5, le=720)
+
+
+class SafetyLostFoundRequest(BaseModel):
+    item_type: Literal["丢失", "拾获"]
+    category: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=2, max_length=500)
+    area: str = Field(min_length=1, max_length=100)
+
+
 class ArtifactRequest(BaseModel):
     mode: AssistantMode = Field(default="audit")
     prompt: str = Field(default="审计学基础", min_length=1, max_length=2000)
@@ -118,6 +146,7 @@ MODE_TITLES: dict[str, str] = {
     "teaching": "教学助手",
     "affairs": "事务助手",
     "audit": "审计学习助手",
+    "safety": "校园安全助手",
 }
 
 
@@ -306,6 +335,12 @@ SYSTEM_PROMPTS: dict[str, str] = {
         "审计法规准则、审计流程、审计证据、工作底稿、审计报告和智能审计数据分析。\n"
         "回答必须体现南审审计特色，优先依据知识库资料；涉及事实、法规、案例和结论时要列出来源或说明资料不足。\n"
         "输出应结构化、可执行，适合学生直接用于预习、复习、案例研讨或实训。"
+    ),
+    "safety": (
+        "你是“守望校园安全助手”，提供校园风险预防、紧急求助指引、隐患上报、安全设施查询、预警解读和安全教育。"
+        "你不能替代110、119、120或校园保卫处；遇到正在发生的人身危险、火灾或医疗急症时，必须优先建议立即拨打相应公共紧急电话并撤离到安全位置。"
+        "回答要短、清楚、可执行，先判断是否紧急，再给出立即行动、校内渠道、信息保护和后续记录。"
+        "不得虚构实时警情、值班人员、设施状态或学校电话号码；不确定时明确提示用户以学校官方信息为准。"
     ),
 }
 
@@ -554,6 +589,127 @@ async def list_affairs_notices(
         "fallbackUsed": live_count == 0,
         "items": ranked[:safe_limit],
     }
+
+
+@app.get("/api/safety/dashboard")
+def safety_dashboard() -> dict[str, Any]:
+    with db() as conn:
+        reports = [dict(row) for row in conn.execute(
+            "select * from safety_reports order by created_at desc limit 8"
+        ).fetchall()]
+        trips = [dict(row) for row in conn.execute(
+            "select * from safety_trips order by created_at desc limit 5"
+        ).fetchall()]
+        lost_found = [dict(row) for row in conn.execute(
+            "select * from safety_lost_found order by created_at desc limit 8"
+        ).fetchall()]
+    return {
+        "campus_status": {"level": "正常", "source": "演示数据 · 待接入保卫处", "updated_at": now_iso()},
+        "emergency_numbers": [
+            {"name": "公安报警", "number": "110"},
+            {"name": "火警", "number": "119"},
+            {"name": "医疗急救", "number": "120"},
+        ],
+        "facilities": [
+            {"id": "SEC-01", "type": "安保", "name": "校园保卫处", "area": "校园主入口", "status": "开放", "phone": "以学校官方通讯录为准"},
+            {"id": "MED-01", "type": "医疗", "name": "校医院", "area": "生活区", "status": "开放时间待核验", "phone": "以学校官方通讯录为准"},
+            {"id": "AED-01", "type": "AED", "name": "AED 示例点位", "area": "体育馆一层", "status": "演示点位，使用前须核验", "phone": "120"},
+            {"id": "FIRE-01", "type": "消防", "name": "应急集合点", "area": "中心广场", "status": "演示点位，服从现场指挥", "phone": "119"},
+        ],
+        "notices": [
+            {"id": "N-01", "level": "yellow", "title": "防范电信网络诈骗提醒", "department": "安全助手演示", "action": "不转账、不泄露验证码，疑似被骗请立即停止操作并报警。", "valid_until": "长期"},
+            {"id": "N-02", "level": "blue", "title": "实验室安全操作提示", "department": "安全助手演示", "action": "进入实验室前确认培训、劳保用品和应急出口。", "valid_until": "长期"},
+        ],
+        "classes": [
+            {"title": "30秒火灾应急卡", "topic": "消防与疏散", "steps": ["立即撤离，不乘电梯", "低姿前进，远离烟气", "到安全地点拨打119"]},
+            {"title": "AED与心肺复苏", "topic": "急救", "steps": ["确认环境安全并呼叫120", "请他人取AED", "按设备语音提示操作"]},
+            {"title": "防诈骗三步检查", "topic": "网络安全", "steps": ["核验身份", "拒绝屏幕共享", "不提供验证码"]},
+        ],
+        "reports": reports,
+        "trips": trips,
+        "lost_found": lost_found,
+    }
+
+
+@app.post("/api/safety/sos")
+def create_safety_sos(request: SafetySosRequest) -> dict[str, Any]:
+    incident_id = f"SOS-{datetime.now().strftime('%m%d%H%M%S')}"
+    created_at = now_iso()
+    with db() as conn:
+        conn.execute(
+            "insert into safety_sos (id, event_type, location, note, contact, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (incident_id, request.event_type, request.location, request.note, request.contact, "已发送（演示）", created_at, created_at),
+        )
+        conn.commit()
+    return {
+        "id": incident_id,
+        "status": "已发送（演示）",
+        "created_at": created_at,
+        "message": "演示求助记录已保存。本原型未连接真实接警台；如有现实危险，请立即拨打110、119或120。",
+    }
+
+
+@app.post("/api/safety/sos/{incident_id}/cancel")
+def cancel_safety_sos(incident_id: str) -> dict[str, str]:
+    with db() as conn:
+        result = conn.execute(
+            "update safety_sos set status = ?, updated_at = ? where id = ?",
+            ("已取消（误触）", now_iso(), incident_id),
+        )
+        conn.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="求助记录不存在")
+    return {"id": incident_id, "status": "已取消（误触）"}
+
+
+@app.post("/api/safety/reports")
+def create_safety_report(request: SafetyReportRequest) -> dict[str, str]:
+    report_id = f"SAF-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    with db() as conn:
+        conn.execute(
+            "insert into safety_reports (id, category, description, location, urgency, privacy, status, created_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (report_id, request.category, request.description, request.location, request.urgency, request.privacy, "待分派", now_iso()),
+        )
+        conn.commit()
+    return {"id": report_id, "status": "待分派", "message": "上报已保存，可使用工单号追踪。"}
+
+
+@app.post("/api/safety/trips")
+def create_safety_trip(request: SafetyTripRequest) -> dict[str, Any]:
+    trip_id = f"TRIP-{uuid.uuid4().hex[:8]}"
+    created_at = now_iso()
+    with db() as conn:
+        conn.execute(
+            "insert into safety_trips (id, destination, contact, duration_minutes, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+            (trip_id, request.destination, request.contact, request.duration_minutes, "守护中", created_at, created_at),
+        )
+        conn.commit()
+    return {"id": trip_id, "status": "守护中", "duration_minutes": request.duration_minutes}
+
+
+@app.post("/api/safety/trips/{trip_id}/arrive")
+def finish_safety_trip(trip_id: str) -> dict[str, str]:
+    with db() as conn:
+        result = conn.execute(
+            "update safety_trips set status = ?, updated_at = ? where id = ?",
+            ("已安全到达", now_iso(), trip_id),
+        )
+        conn.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="守护行程不存在")
+    return {"id": trip_id, "status": "已安全到达"}
+
+
+@app.post("/api/safety/lost-found")
+def create_safety_lost_found(request: SafetyLostFoundRequest) -> dict[str, str]:
+    item_id = f"LF-{uuid.uuid4().hex[:8]}"
+    with db() as conn:
+        conn.execute(
+            "insert into safety_lost_found (id, item_type, category, description, area, status, created_at) values (?, ?, ?, ?, ?, ?, ?)",
+            (item_id, request.item_type, request.category, request.description, request.area, "待核验", now_iso()),
+        )
+        conn.commit()
+    return {"id": item_id, "status": "待核验", "message": "信息已发布，公开页面不会显示联系方式或精确宿舍位置。"}
 
 
 @app.get("/api/sessions")
@@ -1206,6 +1362,48 @@ def init_db() -> None:
                 weeks text not null,
                 created_at text not null
             );
+
+            create table if not exists safety_sos (
+                id text primary key,
+                event_type text not null,
+                location text not null,
+                note text not null,
+                contact text not null,
+                status text not null,
+                created_at text not null,
+                updated_at text not null
+            );
+
+            create table if not exists safety_reports (
+                id text primary key,
+                category text not null,
+                description text not null,
+                location text not null,
+                urgency text not null,
+                privacy text not null,
+                status text not null,
+                created_at text not null
+            );
+
+            create table if not exists safety_trips (
+                id text primary key,
+                destination text not null,
+                contact text not null,
+                duration_minutes integer not null,
+                status text not null,
+                created_at text not null,
+                updated_at text not null
+            );
+
+            create table if not exists safety_lost_found (
+                id text primary key,
+                item_type text not null,
+                category text not null,
+                description text not null,
+                area text not null,
+                status text not null,
+                created_at text not null
+            );
             """
         )
         conn.commit()
@@ -1626,6 +1824,18 @@ def build_mock_answer(
             "- 选择一个审计主题生成思维导图。\n"
             "- 根据同一主题生成 6 道测验题。\n"
             "- 用一个脱敏案例生成审计工作底稿框架。"
+        )
+    elif mode == "safety":
+        body = (
+            "## 风险判断\n"
+            "如果事件正在发生，或已经有人受伤、出现火情、烟雾、威胁、失联等情况，请立即离开危险区域并拨打 110、119 或 120。\n\n"
+            "## 立即行动\n"
+            "1. 先保证自己在安全位置，不独自处理高风险现场。\n"
+            "2. 简短记录地点、时间、现场情况和是否有人受伤。\n"
+            "3. 可通过安全助手生成演示工单；真实处置仍以学校保卫处、辅导员/导师和公共紧急电话为准。\n\n"
+            "## 信息保护\n"
+            "- 不公开身份证号、手机号、宿舍门牌、他人照片等敏感信息。\n"
+            "- 涉及心理危机、欺凌或骚扰时，优先联系可信赖的人和学校正式支持渠道。"
         )
     else:
         body = (

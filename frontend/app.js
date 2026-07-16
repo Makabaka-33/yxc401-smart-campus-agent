@@ -229,6 +229,14 @@ const affairsDetailBody = document.querySelector("#affairsDetailBody");
 const affairsSidebar = document.querySelector("#affairsSidebar");
 const affairsSettingsBtn = document.querySelector("#affairsSettingsBtn");
 const affairsNotificationBtn = document.querySelector("#affairsNotificationBtn");
+const safetyGuardianBtn = document.querySelector("#safetyGuardianBtn");
+const safetyGuardianPanel = document.querySelector("#safetyGuardianPanel");
+const safetyGuardianCloseBtn = document.querySelector("#safetyGuardianCloseBtn");
+const safetyGuardianProfile = document.querySelector("#safetyGuardianProfile");
+const safetyGuardianForm = document.querySelector("#safetyGuardianForm");
+const safetyLocationInput = document.querySelector("#safetyLocationInput");
+const safetyDescriptionInput = document.querySelector("#safetyDescriptionInput");
+const safetyGuardianResult = document.querySelector("#safetyGuardianResult");
 
 let currentMode = "learning";
 let currentSessionId = null;
@@ -248,6 +256,8 @@ let lastMindmapArtifact = null;
 let currentAffairsProfileId = localStorage.getItem("affairs_profile") || "undergraduate";
 let affairsTasks = [];
 let affairsNewsRequestId = 0;
+let safetyGuardianMode = "sos";
+let safetyGuardianDrag = null;
 
 document.querySelectorAll("[data-open-mode]").forEach((button) => {
   button.addEventListener("click", () => openAssistant(button.dataset.openMode));
@@ -267,6 +277,8 @@ function showHomePage() {
   affairsProfileSwitch.hidden = true;
   affairsSidebar.hidden = true;
   affairsNotificationBtn.hidden = true;
+  if (safetyGuardianBtn) safetyGuardianBtn.hidden = true;
+  toggleSafetyGuardian(false);
 }
 
 backHomeBtn.addEventListener("click", showHomePage);
@@ -321,6 +333,21 @@ affairsDetailModal.addEventListener("change", (event) => {
   renderAffairsTasks();
   openAffairsTaskDetail(task.id);
 });
+safetyGuardianBtn?.addEventListener("pointerdown", startSafetyGuardianDrag);
+safetyGuardianBtn?.addEventListener("click", (event) => {
+  if (safetyGuardianDrag?.moved) {
+    event.preventDefault();
+    safetyGuardianDrag = null;
+    return;
+  }
+  toggleSafetyGuardian(true);
+});
+safetyGuardianCloseBtn?.addEventListener("click", () => toggleSafetyGuardian(false));
+safetyGuardianPanel?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-safety-action]");
+  if (actionButton) setSafetyGuardianMode(actionButton.dataset.safetyAction);
+});
+safetyGuardianForm?.addEventListener("submit", handleSafetyGuardianSubmit);
 
 backToChatBtn.addEventListener("click", showChatWorkspace);
 uploadTriggerBtn.addEventListener("click", (event) => {
@@ -581,6 +608,8 @@ function openAssistant(mode) {
   affairsProfileSwitch.hidden = !isAffairs;
   affairsSidebar.hidden = !isAffairs;
   affairsNotificationBtn.hidden = !isAffairs;
+  if (safetyGuardianBtn) safetyGuardianBtn.hidden = !isAffairs;
+  if (!isAffairs) toggleSafetyGuardian(false);
   modeTitle.textContent = config.title;
   modeSubtitle.textContent = config.subtitle;
   assistantLogo.textContent = config.logo;
@@ -594,6 +623,7 @@ function openAssistant(mode) {
   exitFeatureWorkbench();
   if (isAffairs) {
     renderAffairsDashboard();
+    restoreSafetyGuardianPosition();
     affairsSearchInput.focus();
   } else {
     input.focus();
@@ -1656,6 +1686,178 @@ function renderAffairsDashboard() {
   renderAffairsNotices([], { loading: true });
   loadAffairsNotices();
   renderAffairsRecent();
+  updateSafetyGuardianProfile();
+}
+
+function updateSafetyGuardianProfile() {
+  if (!safetyGuardianProfile) return;
+  const profile = getAffairsProfile();
+  safetyGuardianProfile.textContent = `${profile.name} · ${profile.level} · ${profile.campus}`;
+}
+
+function restoreSafetyGuardianPosition() {
+  if (!safetyGuardianBtn) return;
+  const saved = JSON.parse(localStorage.getItem("safety_guardian_position") || "null");
+  if (!saved || typeof saved.left !== "number" || typeof saved.top !== "number") return;
+  placeSafetyGuardian(saved.left, saved.top);
+}
+
+function startSafetyGuardianDrag(event) {
+  if (!safetyGuardianBtn) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  safetyGuardianDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top,
+    moved: false,
+  };
+  safetyGuardianBtn.setPointerCapture?.(event.pointerId);
+  safetyGuardianBtn.classList.add("dragging");
+  safetyGuardianBtn.addEventListener("pointermove", moveSafetyGuardian);
+  safetyGuardianBtn.addEventListener("pointerup", stopSafetyGuardianDrag, { once: true });
+  safetyGuardianBtn.addEventListener("pointercancel", stopSafetyGuardianDrag, { once: true });
+}
+
+function moveSafetyGuardian(event) {
+  if (!safetyGuardianDrag || !safetyGuardianBtn) return;
+  const dx = event.clientX - safetyGuardianDrag.startX;
+  const dy = event.clientY - safetyGuardianDrag.startY;
+  if (Math.abs(dx) + Math.abs(dy) > 6) safetyGuardianDrag.moved = true;
+  placeSafetyGuardian(safetyGuardianDrag.left + dx, safetyGuardianDrag.top + dy);
+  if (!safetyGuardianPanel.hidden) positionSafetyGuardianPanel();
+}
+
+function stopSafetyGuardianDrag(event) {
+  if (!safetyGuardianBtn || !safetyGuardianDrag) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  safetyGuardianBtn.releasePointerCapture?.(event.pointerId);
+  safetyGuardianBtn.classList.remove("dragging");
+  safetyGuardianBtn.removeEventListener("pointermove", moveSafetyGuardian);
+  localStorage.setItem("safety_guardian_position", JSON.stringify({ left: rect.left, top: rect.top }));
+}
+
+function placeSafetyGuardian(left, top) {
+  const margin = 10;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  const width = rect.width || 190;
+  const height = rect.height || 86;
+  const safeLeft = Math.max(margin, Math.min(window.innerWidth - width - margin, left));
+  const safeTop = Math.max(margin, Math.min(window.innerHeight - height - margin, top));
+  safetyGuardianBtn.style.left = `${safeLeft}px`;
+  safetyGuardianBtn.style.top = `${safeTop}px`;
+  safetyGuardianBtn.style.right = "auto";
+  safetyGuardianBtn.style.bottom = "auto";
+}
+
+function positionSafetyGuardianPanel() {
+  if (!safetyGuardianBtn || !safetyGuardianPanel) return;
+  const btn = safetyGuardianBtn.getBoundingClientRect();
+  const panelWidth = Math.min(420, window.innerWidth - 30);
+  const left = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, btn.right - panelWidth));
+  const topCandidate = btn.top - safetyGuardianPanel.offsetHeight - 12;
+  const top = topCandidate > 10 ? topCandidate : Math.min(window.innerHeight - 20, btn.bottom + 12);
+  safetyGuardianPanel.style.left = `${left}px`;
+  safetyGuardianPanel.style.top = `${top}px`;
+  safetyGuardianPanel.style.right = "auto";
+  safetyGuardianPanel.style.bottom = "auto";
+}
+
+function toggleSafetyGuardian(open) {
+  if (!safetyGuardianPanel) return;
+  safetyGuardianPanel.hidden = !open;
+  if (open) {
+    updateSafetyGuardianProfile();
+    setSafetyGuardianMode(safetyGuardianMode);
+    positionSafetyGuardianPanel();
+    safetyLocationInput?.focus();
+  }
+}
+
+function setSafetyGuardianMode(mode) {
+  safetyGuardianMode = mode || "sos";
+  safetyGuardianPanel?.querySelectorAll("[data-safety-action]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.safetyAction === safetyGuardianMode);
+  });
+  if (!safetyDescriptionInput) return;
+  const placeholders = {
+    sos: "例如：我现在身体不舒服，旁边有同学陪同，位置在教学楼 A 区一楼。",
+    report: "例如：沁园宿舍 3 栋门口路灯不亮，夜间通行有安全隐患。",
+    care: "例如：我最近压力很大、睡不好，想先找一个安静的方式缓一缓。",
+  };
+  safetyDescriptionInput.placeholder = placeholders[safetyGuardianMode] || placeholders.sos;
+}
+
+async function handleSafetyGuardianSubmit(event) {
+  event.preventDefault();
+  const profile = getAffairsProfile();
+  const location = safetyLocationInput.value.trim() || "未填写具体地点";
+  const description = safetyDescriptionInput.value.trim() || "用户未填写详细描述";
+  const meta = {
+    sos: {
+      title: "紧急求助",
+      level: "高",
+      next: "请优先联系身边同学、辅导员/导师或宿管；现实危险立即拨打 110 / 119 / 120。",
+      className: "danger",
+    },
+    report: {
+      title: "隐患上报",
+      level: "中",
+      next: "已整理为演示工单，可转交保卫处、总务处或智慧校园建设中心核验处理。",
+      className: "",
+    },
+    care: {
+      title: "心理安抚",
+      level: "关怀",
+      next: "先做 3 次慢呼吸，并尽快联系可信同学、辅导员/导师或学校心理支持渠道。",
+      className: "",
+    },
+  }[safetyGuardianMode] || {};
+  const question = `${meta.title}：${location}`;
+  rememberAffairsQuestion(question);
+  safetyGuardianResult.innerHTML = "<span>正在生成安全记录…</span>";
+  try {
+    let data = {};
+    if (safetyGuardianMode === "sos") {
+      data = await postJson("/api/safety/sos", {
+        event_type: "快速求助",
+        location,
+        note: description,
+        contact: profile.name,
+      });
+    } else if (safetyGuardianMode === "report") {
+      data = await postJson("/api/safety/reports", {
+        category: "校园隐患",
+        description,
+        location,
+        urgency: "较急",
+        privacy: "仅处置部门可见",
+      });
+    } else {
+      data = await postJson("/api/chat", {
+        mode: "safety",
+        message: `学生身份：${profile.level}，地点：${location}。学生描述：${description}。请给出简短心理安抚和下一步求助建议。`,
+        session_id: localStorage.getItem(getAffairsStorageKey("safety_session")) || null,
+      });
+      if (data.session_id) localStorage.setItem(getAffairsStorageKey("safety_session"), data.session_id);
+    }
+    const recordId = data.id || data.session_id || `SAFE-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`;
+    const answer = data.answer ? `<span>${escapeHtml(data.answer)}</span>` : "";
+    safetyGuardianResult.innerHTML = `
+      <strong class="${meta.className}">${escapeHtml(meta.title)}记录已生成：${escapeHtml(recordId)}</strong>
+      <span>身份：${escapeHtml(profile.level)} · ${escapeHtml(profile.campus)}</span>
+      <span>地点：${escapeHtml(location)}</span>
+      <span>风险等级：${escapeHtml(meta.level)}</span>
+      <span>情况：${escapeHtml(description)}</span>
+      <span>下一步：${escapeHtml(data.message || meta.next)}</span>
+      ${answer}`;
+  } catch (error) {
+    safetyGuardianResult.innerHTML = `
+      <strong class="danger">安全记录生成失败</strong>
+      <span>${escapeHtml(error.message)}</span>
+      <span>现实紧急危险请立即拨打 110 / 119 / 120。</span>`;
+  }
 }
 
 function renderAffairsTasks() {
@@ -2013,6 +2215,26 @@ async function fetchJson(url) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+window.addEventListener("resize", () => {
+  if (!safetyGuardianBtn || safetyGuardianBtn.hidden) return;
+  const rect = safetyGuardianBtn.getBoundingClientRect();
+  placeSafetyGuardian(rect.left, rect.top);
+  if (safetyGuardianPanel && !safetyGuardianPanel.hidden) positionSafetyGuardianPanel();
+});
 
 loadAuthPortal();
 openAssistant("affairs");

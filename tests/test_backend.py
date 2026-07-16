@@ -149,6 +149,73 @@ def test_chat_creates_session_and_logs_call():
     assert calls[0]["success"] == 1
 
 
+def test_safety_center_endpoints_create_demo_records():
+    with api() as client:
+        dashboard = client.get("/api/safety/dashboard")
+        sos = client.post(
+            "/api/safety/sos",
+            json={
+                "event_type": "quick help",
+                "location": "library first floor",
+                "note": "demo only",
+                "contact": "student demo",
+            },
+        )
+        report = client.post(
+            "/api/safety/reports",
+            json={
+                "category": "facility risk",
+                "description": "light is broken near the dorm gate",
+                "location": "Qinyuan dorm gate",
+                "urgency": "medium",
+                "privacy": "department only",
+            },
+        )
+        trip = client.post(
+            "/api/safety/trips",
+            json={"destination": "north gate", "contact": "trusted classmate", "duration_minutes": 30},
+        )
+        lost = client.post(
+            "/api/safety/lost-found",
+            json={
+                "item_type": "丢失",
+                "category": "campus card",
+                "description": "blue card holder",
+                "area": "library area",
+            },
+        )
+        arrive = client.post(f"/api/safety/trips/{trip.json()['id']}/arrive")
+        cancelled = client.post(f"/api/safety/sos/{sos.json()['id']}/cancel")
+
+    assert dashboard.status_code == 200
+    assert dashboard.json()["campus_status"]["level"]
+    assert sos.status_code == 200
+    assert sos.json()["status"] == "已发送（演示）"
+    assert report.status_code == 200
+    assert report.json()["status"] == "待分派"
+    assert trip.status_code == 200
+    assert trip.json()["status"] == "守护中"
+    assert lost.status_code == 200
+    assert lost.json()["status"] == "待核验"
+    assert arrive.status_code == 200
+    assert arrive.json()["status"] == "已安全到达"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "已取消（误触）"
+
+
+def test_safety_chat_mode_returns_mock_guidance():
+    with api() as client:
+        response = client.post(
+            "/api/chat",
+            json={"mode": "safety", "message": "I feel unsafe walking back to dorm alone."},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["session_id"]
+    assert response.json()["mock"] is True
+    assert "110" in response.json()["answer"]
+
+
 def test_second_turn_reuses_history():
     with api() as client:
         first = client.post(
