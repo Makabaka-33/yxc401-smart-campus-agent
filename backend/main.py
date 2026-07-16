@@ -99,7 +99,7 @@ class SafetySosRequest(BaseModel):
 
 class SafetyReportRequest(BaseModel):
     category: str = Field(min_length=1, max_length=40)
-    description: str = Field(min_length=5, max_length=1200)
+    description: str = Field(min_length=2, max_length=1200)
     location: str = Field(min_length=1, max_length=160)
     urgency: str = Field(default="一般", max_length=20)
     privacy: str = Field(default="实名可追踪", max_length=30)
@@ -633,7 +633,7 @@ def safety_dashboard() -> dict[str, Any]:
 
 @app.post("/api/safety/sos")
 def create_safety_sos(request: SafetySosRequest) -> dict[str, Any]:
-    incident_id = f"SOS-{datetime.now().strftime('%m%d%H%M%S')}"
+    incident_id = f"SOS-{datetime.now().strftime('%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
     created_at = now_iso()
     with db() as conn:
         conn.execute(
@@ -664,7 +664,7 @@ def cancel_safety_sos(incident_id: str) -> dict[str, str]:
 
 @app.post("/api/safety/reports")
 def create_safety_report(request: SafetyReportRequest) -> dict[str, str]:
-    report_id = f"SAF-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    report_id = f"SAF-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
     with db() as conn:
         conn.execute(
             "insert into safety_reports (id, category, description, location, urgency, privacy, status, created_at) values (?, ?, ?, ?, ?, ?, ?, ?)",

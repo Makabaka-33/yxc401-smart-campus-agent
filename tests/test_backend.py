@@ -231,6 +231,23 @@ def test_safety_center_endpoints_create_demo_records():
     assert cancelled.json()["status"] == "已取消（误触）"
 
 
+def test_safety_report_accepts_short_campus_hazard_description():
+    with api() as client:
+        response = client.post(
+            "/api/safety/reports",
+            json={
+                "category": "校园隐患",
+                "description": "路灯不亮",
+                "location": "沁3",
+                "urgency": "较急",
+                "privacy": "仅处置部门可见",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "待分派"
+
+
 def test_safety_chat_mode_returns_mock_guidance():
     with api() as client:
         response = client.post(

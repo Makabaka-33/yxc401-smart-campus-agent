@@ -2199,9 +2199,23 @@ async function postJson(url, payload) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    throw new Error(formatApiError(error, response.status));
   }
   return response.json();
+}
+
+function formatApiError(error, status) {
+  if (Array.isArray(error?.detail)) {
+    return error.detail
+      .map((item) => {
+        const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
+        return `${field ? `${field}：` : ""}${item.msg || "参数校验失败"}`;
+      })
+      .join("；");
+  }
+  if (typeof error?.detail === "string") return error.detail;
+  if (typeof error?.message === "string") return error.message;
+  return `HTTP ${status}`;
 }
 
 window.addEventListener("resize", () => {

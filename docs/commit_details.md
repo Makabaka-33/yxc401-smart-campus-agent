@@ -266,3 +266,74 @@
 - `node --check frontend/app.js`：通过
 - `node --check frontend/safety.js`：通过
 - `E:\Anaconda_envs\envs\my_env\python.exe -m pytest tests/test_backend.py`：`24 passed`
+
+### 待提交｜2026-07-16｜记录本地网站启动方式
+
+#### 背景
+
+项目本地存在多个相似目录，例如：
+
+- `E:\smart-campus-agent项目\smart-campus-agent-main`
+- `E:\smart-campus-agent项目0716\smart-campus-agent-main`
+- `E:\smart-campus-agent项目0716\事务助手提交包`
+
+为了避免运行到旧副本、旧后端或错误 Python 环境，需要把当前网站的标准启动方式写入项目文档。
+
+#### 记录内容
+
+- 当前 `http://127.0.0.1:8000/` 的正确项目目录：
+  - `E:\smart-campus-agent项目\smart-campus-agent-main`
+- 指定 Python 环境：
+  - `E:\Anaconda_envs\envs\my_env\python.exe`
+- 标准启动命令：
+  - `& "E:\Anaconda_envs\envs\my_env\python.exe" -m uvicorn backend.main:app --reload --port 8000`
+- 验证地址：
+  - `http://127.0.0.1:8000/`
+  - `http://127.0.0.1:8000/api/safety/dashboard`
+  - `http://127.0.0.1:8000/api/model/config`
+- 常见问题：
+  - 安全接口 Not Found
+  - 8000 端口占用
+  - 浏览器仍加载旧页面
+
+#### 涉及文件
+
+- `docs/local_run_guide.md`
+- `README.md`
+- `docs/commit_details.md`
+
+### 待提交｜2026-07-16｜修复安全记录短描述提交失败
+
+#### 问题
+
+悬浮守护小人中选择“隐患上报”，填写：
+
+- 地点：沁3
+- 情况：路灯不亮
+
+提交时曾返回失败。原因有两个：
+
+- 后端要求隐患描述至少 5 个字符，而“路灯不亮”只有 4 个中文字符。
+- 前端没有正确展开 FastAPI 的校验错误数组，导致页面显示 `[object Object]`。
+
+此外，安全工单号原本只精确到秒，连续提交时可能出现数据库主键冲突。
+
+#### 修正
+
+- 将隐患上报描述最短长度从 5 调整为 2。
+- 前端新增 API 错误格式化逻辑，避免显示 `[object Object]`。
+- SOS 记录和隐患工单号增加随机短后缀，避免同一秒内连续提交撞号。
+- 新增测试覆盖“路灯不亮”这类短隐患描述。
+
+#### 涉及文件
+
+- `backend/main.py`
+- `frontend/app.js`
+- `tests/test_backend.py`
+- `docs/commit_details.md`
+
+#### 验证结果
+
+- `node --check frontend/app.js`：通过
+- `node --check frontend/safety.js`：通过
+- `E:\Anaconda_envs\envs\my_env\python.exe -m pytest tests/test_backend.py`：`25 passed`
