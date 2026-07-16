@@ -1419,12 +1419,25 @@ async function refreshAll() {
 
 async function loadStatus() {
   const data = await fetchJson("/api/status");
-  setApiLabel(data.mock_mode);
-  apiStatus.textContent = `${data.model_name} · 文档 ${data.document_count} · 片段 ${data.chunk_count}`;
+  let modelConfig = null;
+  try {
+    modelConfig = await fetchJson("/api/model/config");
+  } catch {
+    modelConfig = null;
+  }
+  setApiLabel(data.mock_mode, modelConfig);
+  const apiText = modelConfig?.configured
+    ? `${modelConfig.model_name} · 接口已配置`
+    : `${data.model_name} · 接口未配置完整`;
+  apiStatus.textContent = `${apiText} · 文档 ${data.document_count} · 片段 ${data.chunk_count}`;
 }
 
-function setApiLabel(isMock) {
-  const label = isMock ? "API 服务 · 模拟模式" : "API 服务 · 真实 API";
+function setApiLabel(isMock, modelConfig = null) {
+  const label = isMock
+    ? "API 服务 · 模拟模式"
+    : modelConfig?.configured
+      ? "API 服务 · 真实 API 已配置"
+      : "API 服务 · 等待配置";
   statusBadge.textContent = label;
   homeStatusBadge.textContent = label;
 }

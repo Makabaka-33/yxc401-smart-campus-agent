@@ -176,6 +176,38 @@ def test_status_and_documents_available():
     assert payload["chunk_count"] >= 1
 
 
+def test_model_config_endpoint_reports_missing_env(monkeypatch):
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    monkeypatch.delenv("MODEL_BASE_URL", raising=False)
+    monkeypatch.delenv("MODEL_NAME", raising=False)
+
+    with api() as client:
+        config = client.get("/api/model/config")
+        probe = client.post("/api/model/probe", json={})
+
+    assert config.status_code == 200
+    assert config.json()["configured"] is False
+    assert config.json()["api_key_configured"] is False
+    assert probe.status_code == 200
+    assert probe.json()["ok"] is False
+    assert "MODEL_API_KEY" in probe.json()["error"]
+
+
+def test_model_config_endpoint_masks_and_normalizes_env(monkeypatch):
+    monkeypatch.setenv("MODEL_API_KEY", "sk-test-123456")
+    monkeypatch.setenv("MODEL_BASE_URL", "https://api.example.com/v1/chat/completions")
+    monkeypatch.setenv("MODEL_NAME", "demo-model")
+
+    with api() as client:
+        config = client.get("/api/model/config").json()
+
+    assert config["configured"] is True
+    assert config["model_name"] == "demo-model"
+    assert config["api_key_tail"] == "3456"
+    assert config["base_url"] == "https://api.example.com/v1"
+    assert config["chat_completions_url"] == "https://api.example.com/v1/chat/completions"
+
+
 def test_mock_auth_endpoints():
     with api() as client:
         status = client.get("/api/auth/status")

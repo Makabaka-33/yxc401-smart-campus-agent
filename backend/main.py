@@ -77,6 +77,10 @@ class ChatResponse(BaseModel):
     mock: bool
 
 
+class ModelProbeRequest(BaseModel):
+    message: str = Field(default="请用一句话回复：API 连接正常。", min_length=1, max_length=200)
+
+
 class ReportRequest(BaseModel):
     session_id: str
 
@@ -429,6 +433,98 @@ def status() -> dict[str, Any]:
         "chunk_count": chunk_count,
         "last_call": dict(last_call) if last_call else None,
     }
+
+
+@app.get("/api/model/config")
+def model_config() -> dict[str, Any]:
+    config = get_model_config()
+    return {
+        "mock_mode": is_mock_mode(),
+        "configured": config["configured"],
+        "model_name": config["model"] or "未配置",
+        "base_url": mask_model_base_url(config["base_url"]),
+        "base_url_configured": bool(config["base_url"]),
+        "api_key_configured": bool(config["api_key"]),
+        "api_key_tail": config["api_key"][-4:] if config["api_key"] else "",
+        "chat_completions_url": (
+            f"{mask_model_base_url(config['base_url'])}/chat/completions"
+            if config["base_url"]
+            else ""
+        ),
+    }
+
+
+@app.post("/api/model/probe")
+async def probe_model_api(request: ModelProbeRequest) -> dict[str, Any]:
+    config = get_model_config()
+    if not config["configured"]:
+        missing = [
+            name
+            for name, value in (
+                ("MODEL_API_KEY", config["api_key"]),
+                ("MODEL_BASE_URL", config["base_url"]),
+                ("MODEL_NAME", config["model"]),
+            )
+            if not value
+        ]
+        return {
+            "ok": False,
+            "mock_mode": is_mock_mode(),
+            "configured": False,
+            "model_name": config["model"] or "未配置",
+            "error": f"模型 API 未配置完整：{', '.join(missing)}",
+        }
+
+    started = time.perf_counter()
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "你是校园事务助手的 API 连通性测试器，只需要简短回答。"},
+            {"role": "user", "content": request.message},
+        ],
+        "temperature": 0,
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{config['base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {config['api_key']}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        if response.status_code >= 400:
+            return {
+                "ok": False,
+                "mock_mode": is_mock_mode(),
+                "configured": True,
+                "model_name": config["model"],
+                "duration_ms": elapsed_ms,
+                "error": f"HTTP {response.status_code}: {response.text[:300]}",
+            }
+        data = response.json()
+        answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return {
+            "ok": True,
+            "mock_mode": is_mock_mode(),
+            "configured": True,
+            "model_name": config["model"],
+            "duration_ms": elapsed_ms,
+            "answer_preview": str(answer).strip()[:160],
+        }
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        return {
+            "ok": False,
+            "mock_mode": is_mock_mode(),
+            "configured": True,
+            "model_name": config["model"],
+            "duration_ms": elapsed_ms,
+            "error": str(exc)[:300],
+        }
 
 
 @app.get("/api/affairs/notices")
@@ -1953,6 +2049,40 @@ def escape_mermaid(text: str) -> str:
     return cleaned[:40] or "审计学习"
 
 
+def get_model_config() -> dict[str, Any]:
+    api_key = os.getenv("MODEL_API_KEY", "").strip()
+    base_url = normalize_model_base_url(os.getenv("MODEL_BASE_URL", ""))
+    model = os.getenv("MODEL_NAME", "").strip()
+    return {
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
+        "configured": bool(api_key and base_url and model),
+    }
+
+
+def normalize_model_base_url(value: str) -> str:
+    base_url = value.strip().rstrip("/")
+    if base_url.endswith("/chat/completions"):
+        base_url = base_url[: -len("/chat/completions")]
+    return base_url.rstrip("/")
+
+
+def mask_model_base_url(base_url: str) -> str:
+    if not base_url:
+        return ""
+    parsed = urlparse(base_url)
+    if not parsed.hostname:
+        return base_url
+    host = parsed.hostname
+    if len(host) > 18:
+        host = f"{host[:8]}...{host[-7:]}"
+    netloc = host
+    if parsed.port:
+        netloc = f"{netloc}:{parsed.port}"
+    return parsed._replace(netloc=netloc).geturl()
+
+
 async def call_model_once(
     mode: AssistantMode,
     question: str,
@@ -1971,14 +2101,12 @@ async def call_model_stream(
     references: list[Reference],
     history: list[dict[str, str]],
 ) -> AsyncIterator[str]:
-    api_key = os.getenv("MODEL_API_KEY", "").strip()
-    base_url = os.getenv("MODEL_BASE_URL", "").strip().rstrip("/")
-    model = os.getenv("MODEL_NAME", "").strip()
-    if not api_key or not base_url or not model:
+    config = get_model_config()
+    if not config["configured"]:
         raise RuntimeError("模型 API 未配置完整，请检查 .env")
 
     payload = {
-        "model": model,
+        "model": config["model"],
         "messages": build_messages(mode, question, references, history),
         "temperature": 0.4,
         "stream": True,
@@ -1987,8 +2115,8 @@ async def call_model_stream(
     async with httpx.AsyncClient(timeout=90) as client:
         async with client.stream(
             "POST",
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            f"{config['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"},
             json=payload,
         ) as response:
             if response.status_code >= 400:
