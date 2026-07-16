@@ -2474,6 +2474,50 @@ def affairs_safe_related_url(raw_url: str, article_url: str) -> str:
     return ""
 
 
+AFFAIRS_TEMPLATE_LINK_TEXTS = {
+    "课表查询",
+    "调停课查询",
+    "教学信息系统",
+    "创新创业教育平台",
+    "毕业实习智能管理平台",
+    "毕业论文（设计）管理系统",
+}
+
+
+def affairs_link_is_template_noise(link_text: str, safe_url: str) -> bool:
+    compact = re.sub(r"\s+", "", link_text)
+    if compact in AFFAIRS_TEMPLATE_LINK_TEXTS:
+        return True
+    path = urlparse(safe_url).path.lower()
+    if any(marker in path for marker in ("/_s", "/system/", "/list.", "/main.")):
+        return True
+    return False
+
+
+def affairs_link_is_actionable_entry(link_text: str, safe_url: str, title: str) -> bool:
+    hostname = (urlparse(safe_url).hostname or "").lower()
+    compact = re.sub(r"\s+", "", link_text)
+    strong_keywords = (
+        "报名入口",
+        "报名系统",
+        "申请入口",
+        "申报入口",
+        "办理入口",
+        "缴费入口",
+        "下载",
+        "附件",
+        "名单",
+        "表格",
+    )
+    if hostname in {"cet-bm.neea.edu.cn", "cet.neea.edu.cn"}:
+        return True
+    if any(keyword in compact for keyword in strong_keywords):
+        return True
+    if any(keyword in title for keyword in ("四六级", "考试", "报名")) and any(keyword in compact for keyword in ("报名", "考试")):
+        return True
+    return False
+
+
 def clean_affairs_news_text(value: str) -> str:
     without_tags = re.sub(r"<[^>]+>", " ", value)
     return re.sub(r"\s+", " ", unescape(without_tags)).strip()
@@ -2661,14 +2705,16 @@ def extract_affairs_article_details(
         if not safe_url:
             continue
         link_text = link["text"] or Path(urlparse(safe_url).path).name
+        if affairs_link_is_template_noise(link_text, safe_url):
+            continue
         path = urlparse(safe_url).path.lower()
         if "附件" in link_text or re.search(r"\.(?:pdf|docx?|xlsx?|pptx?|zip|rar)$", path):
             if safe_url != item["sourceUrl"] and all(entry["url"] != safe_url for entry in attachments):
                 attachments.append({"title": link_text[:100] or "附件", "url": safe_url})
             continue
-        hostname = (urlparse(safe_url).hostname or "").lower()
-        if hostname == "cet-bm.neea.edu.cn" or any(word in link_text for word in ("报名", "系统", "平台", "查询", "办理", "入口")):
+        if affairs_link_is_actionable_entry(link_text, safe_url, str(item["title"])):
             if safe_url != item["sourceUrl"] and all(entry["url"] != safe_url for entry in service_links):
+                hostname = (urlparse(safe_url).hostname or "").lower()
                 service_links.append({"title": link_text[:100] or hostname, "url": safe_url})
 
     action_items = [
@@ -2684,7 +2730,7 @@ def extract_affairs_article_details(
 
     return {
         "contentFetched": True,
-        "contentStatus": "官方正文已解析",
+        "contentStatus": "官方内容已概括",
         "summary": content_summary,
         "contentExcerpt": "\n".join(lines[:36])[:1800],
         "deadline": deadline,
@@ -2872,7 +2918,7 @@ def rank_affairs_news(profile: str, grade: str, live_items: list[dict[str, Any]]
                 "matchReason": f"匹配{level_label} · {item['sourceName']}",
                 "freshness": freshness,
                 "statusLabel": status_label,
-                "sourceStatus": "官方正文已解析" if item.get("contentFetched") else "官网实时" if item.get("live") else "官方已核验",
+                "sourceStatus": "官方内容已概括" if item.get("contentFetched") else "官网实时" if item.get("live") else "官方已核验",
                 "score": round(score, 2),
             }
         )

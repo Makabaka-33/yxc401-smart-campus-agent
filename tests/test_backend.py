@@ -132,6 +132,34 @@ def test_affairs_article_body_is_structured_with_deadline_contacts_and_links():
     assert any(section["title"] == "正式报名" for section in details["sections"])
 
 
+def test_affairs_article_parser_filters_template_navigation_links():
+    item = {
+        "title": "关于2026—2027学年第一学期普通学生教材选购工作的通知",
+        "sourceUrl": "https://jw.nau.edu.cn/2026/0710/c8013a157296/page.htm",
+    }
+    source = next(entry for entry in main_module.AFFAIRS_NEWS_SOURCES if entry["name"] == "教务处")
+    html = """
+    <html><body><article>
+      <h1>关于2026—2027学年第一学期普通学生教材选购工作的通知</h1>
+      <p>本科生可在学生个人信息系统选购下学期教材，开放时间为7月12日8:00至7月22日8:00。</p>
+      <p>请同学们根据课表安排认真核对教材信息。</p>
+      <a href="https://jw.nau.edu.cn/kbcx/list.htm">课表查询</a>
+      <a href="https://jw.nau.edu.cn/jwxt/list.htm">教学信息系统</a>
+      <a href="https://jw.nau.edu.cn/cxcy/list.htm">创新创业教育平台</a>
+      <a href="/_upload/article/files/textbook-notice.pdf">附件：教材选购说明.pdf</a>
+    </article></body></html>
+    """
+
+    details = main_module.extract_affairs_article_details(html, item, source)
+
+    service_titles = {entry["title"] for entry in details["serviceLinks"]}
+    attachment_titles = {entry["title"] for entry in details["attachments"]}
+    assert "课表查询" not in service_titles
+    assert "教学信息系统" not in service_titles
+    assert "创新创业教育平台" not in service_titles
+    assert "附件：教材选购说明.pdf" in attachment_titles
+
+
 def test_chat_creates_session_and_logs_call():
     with api() as client:
         response = client.post(

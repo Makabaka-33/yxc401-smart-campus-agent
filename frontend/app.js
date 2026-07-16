@@ -1945,7 +1945,6 @@ function renderAffairsNotices(notices = [], options = {}) {
             <span class="source-badge ${sourceStatusClass(notice.sourceStatus)}">${escapeHtml(notice.sourceStatus)}</span>
           </div>
           <p>${escapeHtml(notice.summary)}</p>
-          ${renderAffairsNoticeStructured(notice)}
           <div class="affairs-news-meta">
             <span>${escapeHtml(notice.matchReason)}</span>
             <span>发布于 ${escapeHtml(notice.publishedDate)}</span>
@@ -1981,7 +1980,7 @@ async function loadAffairsNotices(forceRefresh = false) {
     renderAffairsNotices(data.items || []);
     const updateTime = new Date(data.generatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     affairsNoticeMeta.textContent = data.liveCount
-      ? `${profile.level} · 官网实时聚合 · 正文解析 ${data.contentFetchedCount || 0} 篇 · ${updateTime}`
+      ? `${profile.level} · 官网实时聚合 · 已概括 ${data.contentFetchedCount || 0} 篇 · ${updateTime}`
       : `${profile.level} · 已核验回退数据 · ${updateTime}`;
   } catch (error) {
     if (requestId !== affairsNewsRequestId) return;
@@ -1993,30 +1992,6 @@ async function loadAffairsNotices(forceRefresh = false) {
       affairsNewsRefreshBtn.textContent = "↻ 刷新资讯";
     }
   }
-}
-
-function renderAffairsNoticeStructured(notice) {
-  if (!notice.contentFetched) return "";
-  const audienceLabels = (notice.audiences || []).map((item) => item === "graduate" ? "研究生" : "本科生");
-  const facts = [
-    audienceLabels.length ? `<span><b>适用对象：</b>${escapeHtml(audienceLabels.join("、"))}</span>` : "",
-    notice.deadlineText ? `<span><b>截止节点：</b>${escapeHtml(notice.deadlineText)}</span>` : "",
-    notice.timeNodes?.length ? `<span><b>正文时间：</b>${escapeHtml(notice.timeNodes.slice(0, 6).join("、"))}</span>` : "",
-    notice.contacts?.length ? `<span><b>联系电话：</b>${escapeHtml(notice.contacts.join("、"))}</span>` : "",
-  ].filter(Boolean).join("");
-  const actions = (notice.actionItems || []).slice(0, 3)
-    .map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const links = [...(notice.serviceLinks || []), ...(notice.attachments || [])]
-    .slice(0, 6)
-    .map((item) => `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)} ↗</a>`)
-    .join("");
-  return `
-    <details class="affairs-notice-structured">
-      <summary>查看正文解析</summary>
-      ${facts ? `<div class="notice-structured-facts">${facts}</div>` : ""}
-      ${actions ? `<ul>${actions}</ul>` : ""}
-      ${links ? `<div class="notice-structured-links">${links}</div>` : ""}
-    </details>`;
 }
 
 function renderAffairsRecent() {
